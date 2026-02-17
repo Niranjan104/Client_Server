@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 18, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/Dell/Desktop/github_workflow/client/app/page.tsx"],"sourcesContent":["\"user client\";\nimport {useState} from \"react\";\n\nexport default function Home(){\nconst [message , setMessage] = useState(\"\");\nconst getData =  async()=>{\n  const res = await fetch(\"http://localhost:5000/hello\");\n  const data = await res.text();\n  setMessage(data);\n};\n\nreturn(\n<div style = {{padding: \"40px\"}}>\n  <h1>Simple clint app</h1>\n  <button onClick = {getData}>  Send request</button>\n  <p>{message}</p>\n  </div>\n);\n}"],"names":[],"mappings":";;;;;AACA;AADA;;;AAGe,SAAS;IACxB,MAAM,CAAC,SAAU,WAAW,GAAG,IAAA,iNAAQ,EAAC;IACxC,MAAM,UAAW;QACf,MAAM,MAAM,MAAM,MAAM;QACxB,MAAM,OAAO,MAAM,IAAI,IAAI;QAC3B,WAAW;IACb;IAEA,qBACA,8OAAC;QAAI,OAAS;YAAC,SAAS;QAAM;;0BAC5B,8OAAC;0BAAG;;;;;;0BACJ,8OAAC;gBAAO,SAAW;0BAAS;;;;;;0BAC5B,8OAAC;0BAAG;;;;;;;;;;;;AAGN"}}]
+}

@@ -1,0 +1,114 @@
+[00:00:02.514] Server  LOG     ✓ Ready in 1818ms
+[00:01:03.295] Server  LOG     ○ Compiling / ...
+[00:01:06.461] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:01:06.633] Browser WARN    Image with src "http://localhost:3000/vercel.svg" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+[00:10:32.963] Server  LOG     ✓ Compiled in 147ms
+[00:10:33.391] Browser ERROR   ./app/page.tsx:2:9
+Ecmascript file had an error
+  1 | "user client";
+> 2 | import {useState} from "react";
+    |         ^^^^^^^^
+  3 |
+  4 | export default function Home(){
+  5 | const [message , setMessage] = useState("");
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+[00:10:42.406] Server  ERROR   ⨯ ./app/page.tsx:2:9
+Ecmascript file had an error
+  1 | "user client";
+> 2 | import {useState} from "react";
+    |         ^^^^^^^^
+  3 |
+  4 | export default function Home(){
+  5 | const [message , setMessage] = useState("");
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+
+
+
+
+[00:10:42.528] Browser ERROR   ./app/page.tsx:2:9
+Ecmascript file had an error
+  1 | "user client";
+> 2 | import {useState} from "react";
+    |         ^^^^^^^^
+  3 |
+  4 | export default function Home(){
+  5 | const [message , setMessage] = useState("");
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+[00:10:43.563] Browser ERROR   ./app/page.tsx:2:9
+Ecmascript file had an error
+  1 | "user client";
+> 2 | import {useState} from "react";
+    |         ^^^^^^^^
+  3 |
+  4 | export default function Home(){
+  5 | const [message , setMessage] = useState("");
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+[00:10:43.715] Browser ERROR   ./app/page.tsx:2:9
+Ecmascript file had an error
+  1 | "user client";
+> 2 | import {useState} from "react";
+    |         ^^^^^^^^
+  3 |
+  4 | export default function Home(){
+  5 | const [message , setMessage] = useState("");
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+[00:10:44.940] Browser ERROR   uncaughtError: Error: ./app/page.tsx:2:9
+Ecmascript file had an error
+  1 | "user client";
+> 2 | import {useState} from "react";
+    |         ^^^^^^^^
+  3 |
+  4 | export default function Home(){
+  5 | const [message , setMessage] = useState("");
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+
+
+
+
+[00:10:45.098] Browser ERROR   ./app/page.tsx:2:9
+Ecmascript file had an error
+  1 | "user client";
+> 2 | import {useState} from "react";
+    |         ^^^^^^^^
+  3 |
+  4 | export default function Home(){
+  5 | const [message , setMessage] = useState("");
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+[00:10:45.213] Browser ERROR   ./app/page.tsx:2:9
+Ecmascript file had an error
+  1 | "user client";
+> 2 | import {useState} from "react";
+    |         ^^^^^^^^
+  3 |
+  4 | export default function Home(){
+  5 | const [message , setMessage] = useState("");
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+[00:11:11.679] Server  LOG     ✓ Compiled in 78ms
+[00:11:12.506] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:11:15.166] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:11:26.114] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:11:37.097] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
