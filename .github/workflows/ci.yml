@@ -1,59 +1,50 @@
-name: CI Pipeline
+name: Full Stack CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
-  client: 
-    name: Client Checks
+
+  validate:
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        app: [client, server]
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm 
-          cache-dependency-path: client/package-lock.json
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+
       - name: Install
-        working-directory: client
+        working-directory: ${{ matrix.app }}
         run: npm ci
+
       - name: Lint
-        working-directory: client
+        working-directory: ${{ matrix.app }}
         run: npm run lint
+
       - name: Test
-        working-directory: client
+        working-directory: ${{ matrix.app }}
         run: npm test
-      - name: Security Audit
-        working-directory: client
+
+      - name: Security Audit (runtime only)
+        working-directory: ${{ matrix.app }}
         run: npm audit --omit=dev --audit-level=high
-      - name: Build
+
+      - name: Build (client only)
+        if: matrix.app == 'client'
         working-directory: client
         run: npm run build
-  server: 
-    name: Server Checks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm 
-          cache-dependency-path: client/package-lock.json
-      - name: Install
-        working-directory: server
-        run: npm ci
-      - name: Lint
-        working-directory: server
-        run: npm run lint
-      - name: Test
-        working-directory: server
-        run: npm test
-      - name: Security Audit
-        working-directory: server
-        run: npm audit --omit=dev --audit-level=high
-  
