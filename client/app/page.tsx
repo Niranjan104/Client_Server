@@ -4,7 +4,7 @@ import {useState} from "react";
 export default function Home(){
 const [message , setMessage] = useState("");
 const getData =  async()=>{
-  const res = await fetch("http://localhost:5000/hello");
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/hello`);
   const data = await res.text();
   setMessage(data);
 };
