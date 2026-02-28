@@ -45,8 +45,8 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Restart Azure Container Instances (ACI)
+      - name: Update and Restart Azure Container Instances (ACI)
         run: |
-          # This command tells Azure to restart your ACIs, forcing them to pull the latest images from your ACR.
-          az container restart --name ${{ secrets.ACI_CLIENT_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }}
-          az container restart --name ${{ secrets.ACI_SERVER_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }}
+          # The 'update' command guarantees ACI will pull the newly built image before starting.
+          az container update --name ${{ secrets.ACI_CLIENT_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }}
+          az container update --name ${{ secrets.ACI_SERVER_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }}
