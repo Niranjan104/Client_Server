@@ -1,5 +1,5 @@
 # ---------- BUILD STAGE ----------
-FROM ghcr.io/bitnami/node:20 AS builder
+FROM mcr.microsoft.com/mirror/docker/library/node:20-alpine AS builder
 WORKDIR /app
 
 ARG APP_VERSION
@@ -10,7 +10,7 @@ RUN npm ci --omit=dev
 COPY . .
 
 # ---------- RUNTIME STAGE ----------
-FROM ghcr.io/bitnami/node:20
+FROM mcr.microsoft.com/mirror/docker/library/node:20-alpine
 
 # create non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup

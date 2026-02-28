@@ -1,5 +1,5 @@
 # BUILD---
-FROM ghcr.io/bitnami/node:20 AS builder
+FROM mcr.microsoft.com/mirror/docker/library/node:20-alpine AS builder
 WORKDIR /app
 
 ARG NEXT_PUBLIC_API_URL
@@ -12,7 +12,7 @@ COPY . .
 RUN  npm run build
 
 # RUNTIME---
-FROM ghcr.io/bitnami/node:20
+FROM mcr.microsoft.com/mirror/docker/library/node:20-alpine
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
