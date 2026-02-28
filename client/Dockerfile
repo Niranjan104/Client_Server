@@ -1,5 +1,5 @@
 # BUILD---
-FROM node:20-alpine AS builder
+FROM ghcr.io/bitnami/node:20 AS builder
 WORKDIR /app
 
 ARG NEXT_PUBLIC_API_URL
@@ -12,7 +12,7 @@ COPY . .
 RUN  npm run build
 
 # RUNTIME---
-FROM node:20-alpine
+FROM ghcr.io/bitnami/node:20
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
