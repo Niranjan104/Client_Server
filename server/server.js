@@ -63,6 +63,10 @@ apiRouter.post("/order", (req, res) => {
 // Register the API Router
 app.use("/api", apiRouter);
 
-app.listen(5000, () => {
-  console.log(`Server running on port 5000 (Version: ${VERSION})`);
-});
+if (require.main === module) {
+  app.listen(5000, () => {
+    console.log(`Server running on port 5000 (Version: ${VERSION})`);
+  });
+}
+
+module.exports = app;

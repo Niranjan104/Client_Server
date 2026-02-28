@@ -2,15 +2,23 @@
 import { useState, useEffect } from "react";
 import { Coffee, ShieldCheck, Server, Send, Loader2 } from "lucide-react";
 
+// Move API_BASE outside the component so it doesn't trigger useEffect dependency warnings
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
+
+interface MenuItem {
+  id: number;
+  name: string;
+  price: number;
+  description: string;
+  inStock: boolean;
+}
+
 export default function Home() {
-  const [menu, setMenu] = useState([]);
+  const [menu, setMenu] = useState<MenuItem[]>([]);
   const [serverVersion, setServerVersion] = useState("Detecting...");
   const [orderStatus, setOrderStatus] = useState("");
   const [loading, setLoading] = useState(true);
-  const [orderingId, setOrderingId] = useState(null);
-
-  // Use the Nginx reverse proxy path if available, or fallback to relative/localhost api paths
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
+  const [orderingId, setOrderingId] = useState<number | null>(null);
 
   useEffect(() => {
     // 1. Fetch Server Version for Blue/Green proof
@@ -19,7 +27,7 @@ export default function Home() {
         const res = await fetch(`${API_BASE}/version`);
         const data = await res.json();
         setServerVersion(data.version);
-      } catch (e) {
+      } catch {
         setServerVersion("Offline");
       }
     };
@@ -30,7 +38,8 @@ export default function Home() {
         const res = await fetch(`${API_BASE}/menu`);
         const data = await res.json();
         setMenu(data);
-      } catch (e) {
+      } catch {
+        // eslint-disable-next-line no-console
         console.error("Failed to fetch menu");
       } finally {
         setLoading(false);
@@ -45,7 +54,7 @@ export default function Home() {
     return () => clearInterval(intervalId);
   }, []);
 
-  const placeOrder = async (item) => {
+  const placeOrder = async (item: MenuItem) => {
     setOrderingId(item.id);
     setOrderStatus("");
 
@@ -57,7 +66,7 @@ export default function Home() {
       });
       const data = await res.json();
       setOrderStatus(data.message);
-    } catch (e) {
+    } catch {
       setOrderStatus("Order failed.");
     } finally {
       setOrderingId(null);
@@ -74,7 +83,7 @@ export default function Home() {
             <div className="p-2 bg-orange-500 rounded-lg text-white">
               <Coffee size={28} strokeWidth={2.5} />
             </div>
-            <h1 className="text-2xl font-bold text-orange-900 tracking-tight">Niranjan's Tea Stall</h1>
+            <h1 className="text-2xl font-bold text-orange-900 tracking-tight">Niranjan&apos;s Tea Stall</h1>
           </div>
 
           <div className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-full border border-green-200 text-sm font-medium">
@@ -120,8 +129,8 @@ export default function Home() {
                   onClick={() => placeOrder(item)}
                   disabled={!item.inStock || orderingId === item.id}
                   className={`w-full py-3 px-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-all ${!item.inStock
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-orange-500 hover:bg-orange-600 text-white shadow-md hover:shadow-lg active:scale-[0.98]'
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-orange-500 hover:bg-orange-600 text-white shadow-md hover:shadow-lg active:scale-[0.98]'
                     }`}
                 >
                   {orderingId === item.id ? (
@@ -144,8 +153,8 @@ export default function Home() {
           Active Backend Region
         </div>
         <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl backdrop-blur-md border border-white/20 text-white font-medium text-lg transition-colors duration-500 ${serverVersion.includes("blue") ? "bg-blue-600/90" :
-            serverVersion.includes("green") ? "bg-emerald-500/90" :
-              "bg-gray-800/90"
+          serverVersion.includes("green") ? "bg-emerald-500/90" :
+            "bg-gray-800/90"
           }`}
         >
           <Server size={24} className={serverVersion !== "Offline" ? "animate-pulse" : ""} />
