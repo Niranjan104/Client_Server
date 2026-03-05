@@ -17,12 +17,17 @@ const menuItems = [
   { id: 6, name: "Samosa (2 pcs)", price: 30, description: "Crispy potato-filled pastry snack", inStock: true },
 ];
 
+let orderLogs = []; // In-memory database for orders
+
 console.log("Tea Stall Server Started - Serving Version: " + VERSION);
+
+// Basic root route so the health probe/users don't see "Cannot GET /"
+app.get("/", (req, res) => {
+  res.send(`<h1>Niranjan's Tea Stall API</h1><p>Backend is running. Version: ${VERSION}</p>`);
+});
 
 // ==========================================
 // API ROUTES 
-// (Nginx strips /api, so we just declare them at the root, 
-// OR Nginx passes them through. Based on typical setups, let's explicitly mount them at /api to make it foolproof without altering Nginx)
 // ==========================================
 
 const apiRouter = express.Router();
@@ -41,31 +46,102 @@ apiRouter.get("/menu", (req, res) => {
   res.json(menuItems);
 });
 
-// Endpoint to submit an Order
+// Endpoint to submit a Cart (creates unpaid order)
 apiRouter.post("/order", (req, res) => {
-  const { itemId, quantity, customerName } = req.body;
+  const { cart, customerName } = req.body;
 
-  if (!itemId || !quantity) {
-    return res.status(400).json({ error: "Item ID and Quantity are required" });
+  if (!cart || !Array.isArray(cart) || cart.length === 0) {
+    return res.status(400).json({ error: "Cart cannot be empty" });
   }
 
-  // Simulate order processing delay
+  let totalAmount = 0;
+  const orderItems = [];
+
+  for (const cartItem of cart) {
+    const item = menuItems.find(m => m.id === cartItem.itemId);
+    if (!item) continue;
+
+    const qty = parseInt(cartItem.quantity, 10);
+    totalAmount += item.price * qty;
+
+    orderItems.push({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      quantity: qty,
+      subtotal: item.price * qty
+    });
+  }
+
+  const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+
+  const newOrder = {
+    orderId,
+    customerName: customerName || "Guest",
+    items: orderItems,
+    totalAmount,
+    status: "Unpaid",
+    timestamp: new Date().toISOString()
+  };
+
+  orderLogs.push(newOrder);
+
+  // Simulate slight network delay
   setTimeout(() => {
     res.status(201).json({
-      message: `Success! Order placed for ${customerName || 'Guest'}.`,
-      orderId: Math.floor(Math.random() * 10000),
-      serverVersion: VERSION,
-      status: "preparing"
+      message: "Please complete payment to finalize your order.",
+      orderId: newOrder.orderId,
+      totalAmount: newOrder.totalAmount
     });
-  }, 800);
+  }, 500);
+});
+
+// Endpoint for client to poll payment status
+apiRouter.post("/check-payment", (req, res) => {
+  const { orderId } = req.body;
+  const orderIndex = orderLogs.findIndex(o => o.orderId === orderId);
+
+  if (orderIndex === -1) {
+    return res.status(404).json({ error: "Order not found" });
+  }
+
+  const order = orderLogs[orderIndex];
+  if (order.status === "Paid") {
+    return res.status(200).json({ status: "Paid", bill: order });
+  } else {
+    return res.status(200).json({ status: "Unpaid" });
+  }
+});
+
+// Endpoint for Admin to manually approve a payment
+apiRouter.post("/admin/approve-payment", (req, res) => {
+  const { orderId } = req.body;
+  const orderIndex = orderLogs.findIndex(o => o.orderId === orderId);
+
+  if (orderIndex === -1) {
+    return res.status(404).json({ error: "Order not found" });
+  }
+
+  orderLogs[orderIndex].status = "Paid";
+  orderLogs[orderIndex].paidAt = new Date().toISOString();
+
+  res.status(200).json({ success: true, message: `Payment approved for ${orderId}` });
+});
+
+// Endpoint to view all stored orders in the backend memory
+apiRouter.get("/orders", (req, res) => {
+  // Sort by newest first
+  const sortedLogs = [...orderLogs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  res.json(sortedLogs);
 });
 
 // Register the API Router
 app.use("/api", apiRouter);
 
 if (require.main === module) {
-  app.listen(5000, () => {
-    console.log(`Server running on port 5000 (Version: ${VERSION})`);
+  const PORT = process.env.PORT || 8080;
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT} (Version: ${VERSION})`);
   });
 }
 

@@ -61,6 +61,13 @@ jobs:
           USERNAME=$(echo "${{ secrets.ACR_USERNAME }}" | tr -d '\r\n')
           PASSWORD=$(echo "${{ secrets.ACR_PASSWORD }}" | tr -d '\r\n')
           
+          # Compute deployment color for blue/green showcase
+          if [ $(( ${{ github.run_number }} % 2 )) -eq 0 ]; then
+            DEPLOY_COLOR="blue"
+          else
+            DEPLOY_COLOR="green"
+          fi
+          
           # 1. Recreate Client Container
           az container delete --name "$CLIENT_NAME" --resource-group "$RG" --yes || true
           
@@ -92,5 +99,6 @@ jobs:
             --registry-password "$PASSWORD" \
             --dns-name-label server-${{ github.run_number }} \
             --ports 8080 \
+            --environment-variables APP_VERSION="$DEPLOY_COLOR" \
             --cpu 1 --memory 1.5
 
