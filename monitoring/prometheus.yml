@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "server_blue"
+    static_configs:
+      - targets: ["server_blue:8080"]
+
+  - job_name: "server_green"
+    static_configs:
+      - targets: ["server_green:8080"]
+
+  - job_name: "nginx"
+    static_configs:
+      - targets: ["nginx_router:80"]

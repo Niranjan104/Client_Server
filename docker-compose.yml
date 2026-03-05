@@ -1,40 +1,115 @@
 version: "3.9"
 
 services:
+
+  # ── Backend Servers ───────────────────────────────────────────────────────
   server_blue:
     build:
       context: ./server
-      args:
-        APP_VERSION: "blue-v1"
     container_name: server_blue
+    environment:
+      - PORT=8080
+      - APP_VERSION=blue
     expose:
-      - "5000"
+      - "8080"
+    networks:
+      - app_net
 
   server_green:
     build:
       context: ./server
-      args:
-        APP_VERSION : "green-v1"
     container_name: server_green
+    environment:
+      - PORT=8080
+      - APP_VERSION=green
     expose:
-      - "5000"
+      - "8080"
+    networks:
+      - app_net
 
-  nginx:
-    build: ./nginx
-    container_name: nginx_proxy
-    ports:
-      - "5000:80"
-    depends_on:
-      - server_blue
-      - server_green
-
-  client:
+  # ── Frontend Clients ──────────────────────────────────────────────────────
+  client_blue:
     build:
       context: ./client
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:5000
-    container_name: client_app
-    ports:
-      - "3000:3000"
+        # Points to NGINX (which internally routes /api to server_blue)
+        NEXT_PUBLIC_API_URL: http://localhost/api
+    container_name: client_blue
+    environment:
+      - PORT=3000
+    expose:
+      - "3000"
     depends_on:
-      - nginx
+      - server_blue
+    networks:
+      - app_net
+
+  client_green:
+    build:
+      context: ./client
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost/api
+    container_name: client_green
+    environment:
+      - PORT=3000
+    expose:
+      - "3000"
+    depends_on:
+      - server_green
+    networks:
+      - app_net
+
+  # ── NGINX Traffic Router ───────────────────────────────────────────────────
+  # Change ACTIVE_COLOR=green and restart this service to switch slots
+  nginx:
+    build:
+      context: ./nginx
+    container_name: nginx_router
+    ports:
+      - "80:80"
+    environment:
+      - ACTIVE_COLOR=blue
+    depends_on:
+      - client_blue
+      - client_green
+      - server_blue
+      - server_green
+    networks:
+      - app_net
+
+  # ── Monitoring: Prometheus ────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - app_net
+    profiles:
+      - monitoring
+
+  # ── Monitoring: Grafana ───────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - app_net
+    profiles:
+      - monitoring
+
+networks:
+  app_net:
+    driver: bridge
+
+volumes:
+  grafana_data:
