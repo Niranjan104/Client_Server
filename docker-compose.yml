@@ -68,7 +68,7 @@ services:
     ports:
       - "80:80"
     environment:
-      - ACTIVE_COLOR=blue
+      - ACTIVE_COLOR=${ACTIVE_COLOR:-blue}
     depends_on:
       - client_blue
       - client_green
