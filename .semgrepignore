@@ -1,0 +1,11 @@
+# Semgrep ignore file
+# Exclude compiled build artifacts — these are framework code, not our source
+
+# Next.js compiled output (minified framework code — false positives)
+client/.next/
+
+# Lockfiles (not our code)
+**/package-lock.json
+
+# Terraform provider cache
+**/.terraform/

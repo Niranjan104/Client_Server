@@ -1,14 +1,15 @@
 FROM nginx:alpine
 
-# Install envsubst (part of gettext) for env variable substitution
+# Install envsubst for env variable substitution at runtime
 RUN apk add --no-cache gettext
 
-# Copy the config template
+# Copy template and entrypoint
 COPY nginx.conf /etc/nginx/nginx.conf.template
-
-# Startup script: substitute ${ACTIVE_COLOR} and launch nginx
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
+
+# Security: drop root — run nginx worker processes as 'nobody'
+USER nobody
 
 EXPOSE 80
 ENTRYPOINT ["/docker-entrypoint.sh"]
