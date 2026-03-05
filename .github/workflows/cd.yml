@@ -32,8 +32,12 @@ jobs:
 
       - name: Build and Push Client Image
         run: |
-          # Use Next's build argument to point to your backend API route
-          docker build --build-arg NEXT_PUBLIC_API_URL=/api -t ${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }} -t ${{ secrets.ACR_LOGIN_SERVER }}/client:latest ./client
+          # NEXT_PUBLIC_* vars are compiled at build time - must use the real server URL here
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=http://server-${{ github.run_number }}.centralindia.azurecontainer.io:8080/api \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }} \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/client:latest \
+            ./client
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }}
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/client:latest
 
