@@ -36,9 +36,12 @@ jobs:
 
       - name: Build and Push Client Image
         run: |
+          # Strip hidden newlines from user secret
+          NGINX_LABEL=$(echo "${{ secrets.NGINX_DNS_LABEL }}" | tr -d '\r\n')
+          
           # NEXT_PUBLIC_* vars are baked at build time — point to the NGINX router (fixed DNS)
           docker build \
-            --build-arg NEXT_PUBLIC_API_URL=http://${{ secrets.NGINX_DNS_LABEL }}.centralindia.azurecontainer.io/api \
+            --build-arg NEXT_PUBLIC_API_URL="http://${NGINX_LABEL}.centralindia.azurecontainer.io/api" \
             -t ${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }} \
             -t ${{ secrets.ACR_LOGIN_SERVER }}/client:latest \
             ./client
