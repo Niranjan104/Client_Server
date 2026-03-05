@@ -68,6 +68,7 @@ jobs:
             --name "$CLIENT_NAME" \
             --resource-group "$RG" \
             --location centralindia \
+            --os-type Linux \
             --image "$LOGIN_SERVER/client:${{ github.sha }}" \
             --registry-login-server "$LOGIN_SERVER" \
             --registry-username "$USERNAME" \
@@ -84,6 +85,7 @@ jobs:
             --name "$SERVER_NAME" \
             --resource-group "$RG" \
             --location centralindia \
+            --os-type Linux \
             --image "$LOGIN_SERVER/server:${{ github.sha }}" \
             --registry-login-server "$LOGIN_SERVER" \
             --registry-username "$USERNAME" \
