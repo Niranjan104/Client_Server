@@ -54,32 +54,32 @@ jobs:
           # To force an image pull, we must delete the current container and recreate it.
           
           # 1. Recreate Client Container
-          az container delete --name ${{ secrets.ACI_CLIENT_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} --yes || true
+          az container delete --name "${{ secrets.ACI_CLIENT_NAME }}" --resource-group "${{ secrets.ACI_RESOURCE_GROUP }}" --yes || true
           
           az container create \
-            --name ${{ secrets.ACI_CLIENT_NAME }} \
-            --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} \
+            --name "${{ secrets.ACI_CLIENT_NAME }}" \
+            --resource-group "${{ secrets.ACI_RESOURCE_GROUP }}" \
             --location centralindia \
-            --image ${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }} \
-            --registry-login-server ${{ secrets.ACR_LOGIN_SERVER }} \
-            --registry-username ${{ secrets.ACR_USERNAME }} \
-            --registry-password ${{ secrets.ACR_PASSWORD }} \
+            --image "${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }}" \
+            --registry-login-server "${{ secrets.ACR_LOGIN_SERVER }}" \
+            --registry-username "${{ secrets.ACR_USERNAME }}" \
+            --registry-password "${{ secrets.ACR_PASSWORD }}" \
             --dns-name-label client-${{ github.run_number }} \
             --ports 3000 \
-            --environment-variables NEXT_PUBLIC_API_URL=http://${{ secrets.ACI_SERVER_NAME }}.centralindia.azurecontainer.io:8080 \
+            --environment-variables NEXT_PUBLIC_API_URL="http://${{ secrets.ACI_SERVER_NAME }}.centralindia.azurecontainer.io:8080" \
             --cpu 1 --memory 1.5
           
           # 2. Recreate Server Container
-          az container delete --name ${{ secrets.ACI_SERVER_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} --yes || true
+          az container delete --name "${{ secrets.ACI_SERVER_NAME }}" --resource-group "${{ secrets.ACI_RESOURCE_GROUP }}" --yes || true
           
           az container create \
-            --name ${{ secrets.ACI_SERVER_NAME }} \
-            --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} \
+            --name "${{ secrets.ACI_SERVER_NAME }}" \
+            --resource-group "${{ secrets.ACI_RESOURCE_GROUP }}" \
             --location centralindia \
-            --image ${{ secrets.ACR_LOGIN_SERVER }}/server:${{ github.sha }} \
-            --registry-login-server ${{ secrets.ACR_LOGIN_SERVER }} \
-            --registry-username ${{ secrets.ACR_USERNAME }} \
-            --registry-password ${{ secrets.ACR_PASSWORD }} \
+            --image "${{ secrets.ACR_LOGIN_SERVER }}/server:${{ github.sha }}" \
+            --registry-login-server "${{ secrets.ACR_LOGIN_SERVER }}" \
+            --registry-username "${{ secrets.ACR_USERNAME }}" \
+            --registry-password "${{ secrets.ACR_PASSWORD }}" \
             --dns-name-label server-${{ github.run_number }} \
             --ports 8080 \
             --cpu 1 --memory 1.5
