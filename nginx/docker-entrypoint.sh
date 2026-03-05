@@ -1,8 +1,12 @@
 #!/bin/sh
-# Substitute all env vars in the nginx config template at startup
+set -e
+
+# Write the processed config to /tmp where nobody has write access
 envsubst '${ACTIVE_COLOR} ${BLUE_SERVER_HOST} ${GREEN_SERVER_HOST} ${BLUE_CLIENT_HOST} ${GREEN_CLIENT_HOST} ${RESOLVER_IP}' \
   < /etc/nginx/nginx.conf.template \
-  > /etc/nginx/nginx.conf
+  > /tmp/nginx/conf/nginx.conf
 
 echo "NGINX started | ACTIVE=${ACTIVE_COLOR} | blue_server=${BLUE_SERVER_HOST} | green_server=${GREEN_SERVER_HOST}"
-exec nginx -g 'daemon off;'
+
+# Start nginx pointing at the writable config location
+exec nginx -c /tmp/nginx/conf/nginx.conf -g 'daemon off;'
