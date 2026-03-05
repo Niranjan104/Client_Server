@@ -1,7 +1,9 @@
 FROM nginx:alpine
 
-# Install envsubst for env variable substitution at runtime
-RUN apk add --no-cache gettext
+# Install envsubst and grant nginx binary permission to bind privileged ports.
+RUN apk add --no-cache gettext libcap \
+    && setcap 'cap_net_bind_service=+ep' /usr/sbin/nginx \
+    && apk del libcap
 
 # Copy template and entrypoint
 COPY nginx.conf /etc/nginx/nginx.conf.template
