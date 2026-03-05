@@ -17,6 +17,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # ── 1. Build & Push Images ─────────────────────────────────────────────
       - name: Log in to Azure Container Registry (ACR)
         uses: azure/docker-login@v2
         with:
@@ -26,15 +27,18 @@ jobs:
 
       - name: Build and Push Server Image
         run: |
-          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/server:${{ github.sha }} -t ${{ secrets.ACR_LOGIN_SERVER }}/server:latest ./server
+          docker build \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/server:${{ github.sha }} \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/server:latest \
+            ./server
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/server:${{ github.sha }}
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/server:latest
 
       - name: Build and Push Client Image
         run: |
-          # NEXT_PUBLIC_* vars are compiled at build time - must use the real server URL here
+          # NEXT_PUBLIC_* vars are baked at build time — point to the NGINX router (fixed DNS)
           docker build \
-            --build-arg NEXT_PUBLIC_API_URL=http://server-${{ github.run_number }}.centralindia.azurecontainer.io:8080/api \
+            --build-arg NEXT_PUBLIC_API_URL=http://${{ secrets.NGINX_DNS_LABEL }}.centralindia.azurecontainer.io/api \
             -t ${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }} \
             -t ${{ secrets.ACR_LOGIN_SERVER }}/client:latest \
             ./client
@@ -43,57 +47,69 @@ jobs:
 
       - name: Build and Push NGINX Image
         run: |
-          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/nginx:${{ github.sha }} -t ${{ secrets.ACR_LOGIN_SERVER }}/nginx:latest ./nginx
+          docker build \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/nginx:${{ github.sha }} \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/nginx:latest \
+            ./nginx
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/nginx:${{ github.sha }}
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/nginx:latest
 
+      # ── 2. Azure Login ─────────────────────────────────────────────────────
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Update and Restart Azure Container Instances (ACI)
+      # ── 3. Blue/Green Rotation ─────────────────────────────────────────────
+      - name: Deploy to Inactive Slot and Flip Traffic
         run: |
-          # Azure CLI does not support 'az container update'. 
-          # To force an image pull, we must delete the current container and recreate it.
-          
-          # Clean hidden newlines from user secrets
-          RG=$(echo "${{ secrets.ACI_RESOURCE_GROUP }}" | tr -d '\r\n')
-          CLIENT_NAME=$(echo "${{ secrets.ACI_CLIENT_NAME }}" | tr -d '\r\n')
-          SERVER_NAME=$(echo "${{ secrets.ACI_SERVER_NAME }}" | tr -d '\r\n')
+          # Strip hidden CR/LF from secrets
+          RG=$(echo "${{ secrets.ACI_RESOURCE_GROUP }}"  | tr -d '\r\n')
           LOGIN_SERVER=$(echo "${{ secrets.ACR_LOGIN_SERVER }}" | tr -d '\r\n')
-          USERNAME=$(echo "${{ secrets.ACR_USERNAME }}" | tr -d '\r\n')
-          PASSWORD=$(echo "${{ secrets.ACR_PASSWORD }}" | tr -d '\r\n')
-          
-          # Compute deployment color for blue/green showcase
-          if [ $(( ${{ github.run_number }} % 2 )) -eq 0 ]; then
-            DEPLOY_COLOR="blue"
-          else
-            DEPLOY_COLOR="green"
-          fi
-          
-          # 1. Recreate Client Container
-          az container delete --name "$CLIENT_NAME" --resource-group "$RG" --yes || true
-          
-          az container create \
-            --name "$CLIENT_NAME" \
+          USERNAME=$(echo "${{ secrets.ACR_USERNAME }}"   | tr -d '\r\n')
+          PASSWORD=$(echo "${{ secrets.ACR_PASSWORD }}"   | tr -d '\r\n')
+          NGINX_LABEL=$(echo "${{ secrets.NGINX_DNS_LABEL }}" | tr -d '\r\n')
+          SERVER_BASE=$(echo "${{ secrets.SERVER_BASE_NAME }}" | tr -d '\r\n')
+          CLIENT_BASE=$(echo "${{ secrets.CLIENT_BASE_NAME }}" | tr -d '\r\n')
+
+          # ── Step 1: Find which slot is currently live ──────────────────────
+          # We store the active color as an ACI tag on the NGINX container.
+          # On the very first deployment, there is no NGINX container yet → default to blue.
+          ACTIVE_COLOR=$(az container show \
+            --name "$NGINX_LABEL" \
             --resource-group "$RG" \
-            --location centralindia \
-            --os-type Linux \
-            --image "$LOGIN_SERVER/client:${{ github.sha }}" \
-            --registry-login-server "$LOGIN_SERVER" \
-            --registry-username "$USERNAME" \
-            --registry-password "$PASSWORD" \
-            --dns-name-label client-${{ github.run_number }} \
-            --ports 3000 \
-            --environment-variables NEXT_PUBLIC_API_URL="http://$SERVER_NAME.centralindia.azurecontainer.io:8080" \
-            --cpu 1 --memory 1.5
-          
-          # 2. Recreate Server Container
-          az container delete --name "$SERVER_NAME" --resource-group "$RG" --yes || true
-          
+            --query "tags.active_color" \
+            --output tsv 2>/dev/null || echo "blue")
+
+          if [ -z "$ACTIVE_COLOR" ] || [ "$ACTIVE_COLOR" = "None" ]; then
+            ACTIVE_COLOR="blue"
+          fi
+
+          if [ "$ACTIVE_COLOR" = "blue" ]; then
+            INACTIVE_COLOR="green"
+          else
+            INACTIVE_COLOR="blue"
+          fi
+
+          echo "Current active slot : $ACTIVE_COLOR"
+          echo "Deploying to slot   : $INACTIVE_COLOR"
+
+          # Fixed DNS hostnames for all 4 app containers
+          BLUE_SERVER_HOST="${SERVER_BASE}-blue.centralindia.azurecontainer.io"
+          GREEN_SERVER_HOST="${SERVER_BASE}-green.centralindia.azurecontainer.io"
+          BLUE_CLIENT_HOST="${CLIENT_BASE}-blue.centralindia.azurecontainer.io"
+          GREEN_CLIENT_HOST="${CLIENT_BASE}-green.centralindia.azurecontainer.io"
+
+          # ── Step 2: Deploy new image to INACTIVE server slot ───────────────
+          # The ACTIVE slot is untouched — users keep browsing while we update green.
+          echo "Deploying new server image to ${SERVER_BASE}-${INACTIVE_COLOR} ..."
+          az container delete \
+            --name "${SERVER_BASE}-${INACTIVE_COLOR}" \
+            --resource-group "$RG" \
+            --yes 2>/dev/null || true
+
           az container create \
-            --name "$SERVER_NAME" \
+            --name "${SERVER_BASE}-${INACTIVE_COLOR}" \
             --resource-group "$RG" \
             --location centralindia \
             --os-type Linux \
@@ -101,8 +117,88 @@ jobs:
             --registry-login-server "$LOGIN_SERVER" \
             --registry-username "$USERNAME" \
             --registry-password "$PASSWORD" \
-            --dns-name-label server-${{ github.run_number }} \
+            --dns-name-label "${SERVER_BASE}-${INACTIVE_COLOR}" \
             --ports 8080 \
-            --environment-variables APP_VERSION="$DEPLOY_COLOR" \
-            --cpu 1 --memory 1.5
+            --environment-variables APP_VERSION="$INACTIVE_COLOR" PORT="8080" \
+            --cpu 0.5 --memory 1
 
+          # ── Step 3: Deploy new image to INACTIVE client slot ───────────────
+          echo "Deploying new client image to ${CLIENT_BASE}-${INACTIVE_COLOR} ..."
+          az container delete \
+            --name "${CLIENT_BASE}-${INACTIVE_COLOR}" \
+            --resource-group "$RG" \
+            --yes 2>/dev/null || true
+
+          az container create \
+            --name "${CLIENT_BASE}-${INACTIVE_COLOR}" \
+            --resource-group "$RG" \
+            --location centralindia \
+            --os-type Linux \
+            --image "$LOGIN_SERVER/client:${{ github.sha }}" \
+            --registry-login-server "$LOGIN_SERVER" \
+            --registry-username "$USERNAME" \
+            --registry-password "$PASSWORD" \
+            --dns-name-label "${CLIENT_BASE}-${INACTIVE_COLOR}" \
+            --ports 3000 \
+            --cpu 0.5 --memory 1
+
+          # ── Step 4: Wait for inactive slot to become healthy ───────────────
+          echo "Waiting 45s for ${INACTIVE_COLOR} slot to start..."
+          sleep 45
+
+          INACTIVE_SERVER_URL="http://${SERVER_BASE}-${INACTIVE_COLOR}.centralindia.azurecontainer.io:8080/api/version"
+          echo "Smoke testing: $INACTIVE_SERVER_URL"
+
+          # Retry smoke test up to 5 times with 15s between attempts
+          SMOKE_PASSED=false
+          for i in 1 2 3 4 5; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$INACTIVE_SERVER_URL" --max-time 10 || echo "000")
+            echo "  Attempt $i: HTTP $HTTP_STATUS"
+            if [ "$HTTP_STATUS" = "200" ]; then
+              SMOKE_PASSED=true
+              break
+            fi
+            sleep 15
+          done
+
+          # ── Step 5: Result — either flip traffic or rollback ───────────────
+          if [ "$SMOKE_PASSED" != "true" ]; then
+            echo "::error::Smoke test FAILED on ${INACTIVE_COLOR} slot. Active slot (${ACTIVE_COLOR}) unchanged."
+            echo "Rollback: no action needed — ${ACTIVE_COLOR} is still live."
+            exit 1
+          fi
+
+          echo "Smoke test PASSED. Flipping NGINX from ${ACTIVE_COLOR} → ${INACTIVE_COLOR} ..."
+
+          # ── Step 6: Recreate NGINX pointing to the new active slot ─────────
+          # NGINX downtime is typically 3-5 seconds while the new container starts.
+          az container delete \
+            --name "$NGINX_LABEL" \
+            --resource-group "$RG" \
+            --yes 2>/dev/null || true
+
+          az container create \
+            --name "$NGINX_LABEL" \
+            --resource-group "$RG" \
+            --location centralindia \
+            --os-type Linux \
+            --image "$LOGIN_SERVER/nginx:${{ github.sha }}" \
+            --registry-login-server "$LOGIN_SERVER" \
+            --registry-username "$USERNAME" \
+            --registry-password "$PASSWORD" \
+            --dns-name-label "$NGINX_LABEL" \
+            --ports 80 \
+            --environment-variables \
+                ACTIVE_COLOR="$INACTIVE_COLOR" \
+                BLUE_SERVER_HOST="$BLUE_SERVER_HOST" \
+                GREEN_SERVER_HOST="$GREEN_SERVER_HOST" \
+                BLUE_CLIENT_HOST="$BLUE_CLIENT_HOST" \
+                GREEN_CLIENT_HOST="$GREEN_CLIENT_HOST" \
+            --tags active_color="$INACTIVE_COLOR" \
+            --cpu 0.25 --memory 0.5
+
+          echo ""
+          echo "✅ Deployment complete!"
+          echo "   Active slot : $INACTIVE_COLOR"
+          echo "   Public URL  : http://$NGINX_LABEL.centralindia.azurecontainer.io"
+          echo "   Admin Portal: http://$NGINX_LABEL.centralindia.azurecontainer.io/admin"
