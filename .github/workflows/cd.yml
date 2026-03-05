@@ -26,18 +26,21 @@ jobs:
 
       - name: Build and Push Server Image
         run: |
-          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/server:latest ./server
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/server:${{ github.sha }} -t ${{ secrets.ACR_LOGIN_SERVER }}/server:latest ./server
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/server:${{ github.sha }}
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/server:latest
 
       - name: Build and Push Client Image
         run: |
           # Use Next's build argument to point to your backend API route
-          docker build --build-arg NEXT_PUBLIC_API_URL=/api -t ${{ secrets.ACR_LOGIN_SERVER }}/client:latest ./client
+          docker build --build-arg NEXT_PUBLIC_API_URL=/api -t ${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }} -t ${{ secrets.ACR_LOGIN_SERVER }}/client:latest ./client
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }}
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/client:latest
 
       - name: Build and Push NGINX Image
         run: |
-          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/nginx:latest ./nginx
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/nginx:${{ github.sha }} -t ${{ secrets.ACR_LOGIN_SERVER }}/nginx:latest ./nginx
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/nginx:${{ github.sha }}
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/nginx:latest
 
       - name: Azure Login
@@ -47,6 +50,8 @@ jobs:
 
       - name: Update and Restart Azure Container Instances (ACI)
         run: |
-          # The 'update' command guarantees ACI will pull the newly built image before starting.
-          az container update --name ${{ secrets.ACI_CLIENT_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }}
-          az container update --name ${{ secrets.ACI_SERVER_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }}
+          # By providing a specific image tag (the git commit SHA) instead of latest,
+          # Azure Resource Manager detects a template change and forces a pull.
+          az container update --name ${{ secrets.ACI_CLIENT_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} --image ${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }}
+          az container update --name ${{ secrets.ACI_SERVER_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} --image ${{ secrets.ACR_LOGIN_SERVER }}/server:${{ github.sha }}
+
