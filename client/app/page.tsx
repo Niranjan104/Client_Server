@@ -13,6 +13,22 @@ interface MenuItem {
   inStock: boolean;
 }
 
+interface OrderItem {
+  name: string;
+  price: number;
+  quantity: number;
+  subtotal: number;
+}
+
+interface Bill {
+  orderId: string;
+  customerName: string;
+  items: OrderItem[];
+  totalAmount: number;
+  status: string;
+  timestamp: string;
+}
+
 export default function Home() {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [serverVersion, setServerVersion] = useState("Detecting...");
@@ -23,7 +39,7 @@ export default function Home() {
   // State for Cart & Payments
   const [cart, setCart] = useState<Record<number, number>>({});
   const [pendingOrder, setPendingOrder] = useState<{ orderId: string, totalAmount: number } | null>(null);
-  const [bill, setBill] = useState<any>(null);
+  const [bill, setBill] = useState<Bill | null>(null);
 
   useEffect(() => {
     const fetchVersion = async () => {
@@ -224,7 +240,7 @@ export default function Home() {
 
               <div className="mb-6">
                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Items Ordered</h4>
-                {bill.items?.map((item: any, idx: number) => (
+                {bill.items?.map((item: OrderItem, idx: number) => (
                   <div key={idx} className="flex justify-between items-center mb-3">
                     <div>
                       <p className="font-bold text-gray-800">{item.name}</p>

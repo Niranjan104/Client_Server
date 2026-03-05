@@ -19,3 +19,13 @@
 [00:02:24.978] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
 [00:02:54.611] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
 [00:03:58.351] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:16:11.162] Server  LOG     ✓ Compiled in 98ms
+[00:16:11.171] Server  WARN    ⚠ Fast Refresh had to perform a full reload when ./app/admin/page.tsx changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[00:16:11.180] Server  WARN    ⚠ Fast Refresh had to perform a full reload when ./app/admin/page.tsx changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[00:16:11.904] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:16:11.904] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:17:09.231] Server  WARN    ⚠ Fast Refresh had to perform a full reload when ./app/page.tsx changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[00:17:09.244] Server  WARN    ⚠ Fast Refresh had to perform a full reload when ./app/page.tsx changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[00:17:09.253] Server  LOG     ✓ Compiled in 51ms
+[00:17:09.971] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:17:09.973] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold

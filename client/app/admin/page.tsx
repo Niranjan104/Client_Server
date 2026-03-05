@@ -5,8 +5,25 @@ import { Loader2, ShieldCheck, CheckCircle } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
 
+interface OrderItem {
+    name: string;
+    price: number;
+    quantity: number;
+    subtotal: number;
+}
+
+interface OrderLog {
+    orderId: string;
+    customerName: string;
+    items: OrderItem[];
+    totalAmount: number;
+    status: string;
+    timestamp: string;
+    paidAt?: string;
+}
+
 export default function AdminPage() {
-    const [orderLogs, setOrderLogs] = useState<any[]>([]);
+    const [orderLogs, setOrderLogs] = useState<OrderLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [approvingId, setApprovingId] = useState<string | null>(null);
 
@@ -45,7 +62,7 @@ export default function AdminPage() {
             } else {
                 alert("Failed to approve payment");
             }
-        } catch (err) {
+        } catch {
             alert("Network error approving payment");
         } finally {
             setApprovingId(null);
@@ -98,7 +115,7 @@ export default function AdminPage() {
 
                                     <div className="space-y-2 bg-gray-50 p-4 rounded-xl border border-gray-100">
                                         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Order Items:</p>
-                                        {log.items?.map((item: any, i: number) => (
+                                        {log.items?.map((item: OrderItem, i: number) => (
                                             <div key={i} className="text-sm text-gray-700 flex justify-between">
                                                 <span><span className="font-bold text-gray-900">{item.quantity}x</span> {item.name}</span>
                                                 <span className="text-gray-400 font-mono">₹{item.price}</span>
