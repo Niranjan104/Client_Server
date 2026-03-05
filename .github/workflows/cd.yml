@@ -76,12 +76,12 @@ jobs:
           CLIENT_BASE=$(echo "${{ secrets.CLIENT_BASE_NAME }}" | tr -d '\r\n')
 
           # ── Step 1: Find which slot is currently live ──────────────────────
-          # We store the active color as an ACI tag on the NGINX container.
+          # We check the ACTIVE_COLOR environment variable on the existing NGINX container.
           # On the very first deployment, there is no NGINX container yet → default to blue.
           ACTIVE_COLOR=$(az container show \
             --name "$NGINX_LABEL" \
             --resource-group "$RG" \
-            --query "tags.active_color" \
+            --query "containers[0].environmentVariables[?name=='ACTIVE_COLOR'].value | [0]" \
             --output tsv 2>/dev/null || echo "blue")
 
           if [ -z "$ACTIVE_COLOR" ] || [ "$ACTIVE_COLOR" = "None" ]; then
@@ -197,7 +197,6 @@ jobs:
                 GREEN_SERVER_HOST="$GREEN_SERVER_HOST" \
                 BLUE_CLIENT_HOST="$BLUE_CLIENT_HOST" \
                 GREEN_CLIENT_HOST="$GREEN_CLIENT_HOST" \
-            --tags active_color="$INACTIVE_COLOR" \
             --cpu 0.25 --memory 0.5
 
           echo ""
