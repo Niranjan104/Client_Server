@@ -50,8 +50,35 @@ jobs:
 
       - name: Update and Restart Azure Container Instances (ACI)
         run: |
-          # By providing a specific image tag (the git commit SHA) instead of latest,
-          # Azure Resource Manager detects a template change and forces a pull.
-          az container update --name ${{ secrets.ACI_CLIENT_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} --image ${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }}
-          az container update --name ${{ secrets.ACI_SERVER_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} --image ${{ secrets.ACR_LOGIN_SERVER }}/server:${{ github.sha }}
+          # Azure CLI does not support 'az container update'. 
+          # To force an image pull, we must delete the current container and recreate it.
+          
+          # 1. Recreate Client Container
+          az container delete --name ${{ secrets.ACI_CLIENT_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} --yes
+          
+          az container create \
+            --name ${{ secrets.ACI_CLIENT_NAME }} \
+            --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} \
+            --image ${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }} \
+            --registry-login-server ${{ secrets.ACR_LOGIN_SERVER }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password ${{ secrets.ACR_PASSWORD }} \
+            --dns-name-label client-${{ env.RANDOM_SUFFIX || 'prod' }} \
+            --ports 3000 \
+            --environment-variables NEXT_PUBLIC_API_URL=http://${{ secrets.ACI_SERVER_NAME }}.${{ secrets.ACI_REGION }}.azurecontainer.io:8080 \
+            --cpu 1 --memory 1.5
+          
+          # 2. Recreate Server Container
+          az container delete --name ${{ secrets.ACI_SERVER_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} --yes
+          
+          az container create \
+            --name ${{ secrets.ACI_SERVER_NAME }} \
+            --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} \
+            --image ${{ secrets.ACR_LOGIN_SERVER }}/server:${{ github.sha }} \
+            --registry-login-server ${{ secrets.ACR_LOGIN_SERVER }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password ${{ secrets.ACR_PASSWORD }} \
+            --dns-name-label server-${{ env.RANDOM_SUFFIX || 'prod' }} \
+            --ports 8080 \
+            --cpu 1 --memory 1.5
 
