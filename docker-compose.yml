@@ -69,6 +69,11 @@ services:
       - "80:80"
     environment:
       - ACTIVE_COLOR=${ACTIVE_COLOR:-blue}
+      - BLUE_SERVER_HOST=server_blue
+      - GREEN_SERVER_HOST=server_green
+      - BLUE_CLIENT_HOST=client_blue
+      - GREEN_CLIENT_HOST=client_green
+      - RESOLVER_IP=127.0.0.11
     depends_on:
       - client_blue
       - client_green

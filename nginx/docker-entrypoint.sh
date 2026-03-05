@@ -1,6 +1,6 @@
 #!/bin/sh
 # Substitute all env vars in the nginx config template at startup
-envsubst '${ACTIVE_COLOR} ${BLUE_SERVER_HOST} ${GREEN_SERVER_HOST} ${BLUE_CLIENT_HOST} ${GREEN_CLIENT_HOST}' \
+envsubst '${ACTIVE_COLOR} ${BLUE_SERVER_HOST} ${GREEN_SERVER_HOST} ${BLUE_CLIENT_HOST} ${GREEN_CLIENT_HOST} ${RESOLVER_IP}' \
   < /etc/nginx/nginx.conf.template \
   > /etc/nginx/nginx.conf
 
