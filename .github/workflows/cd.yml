@@ -53,33 +53,41 @@ jobs:
           # Azure CLI does not support 'az container update'. 
           # To force an image pull, we must delete the current container and recreate it.
           
+          # Clean hidden newlines from user secrets
+          RG=$(echo "${{ secrets.ACI_RESOURCE_GROUP }}" | tr -d '\r\n')
+          CLIENT_NAME=$(echo "${{ secrets.ACI_CLIENT_NAME }}" | tr -d '\r\n')
+          SERVER_NAME=$(echo "${{ secrets.ACI_SERVER_NAME }}" | tr -d '\r\n')
+          LOGIN_SERVER=$(echo "${{ secrets.ACR_LOGIN_SERVER }}" | tr -d '\r\n')
+          USERNAME=$(echo "${{ secrets.ACR_USERNAME }}" | tr -d '\r\n')
+          PASSWORD=$(echo "${{ secrets.ACR_PASSWORD }}" | tr -d '\r\n')
+          
           # 1. Recreate Client Container
-          az container delete --name "${{ secrets.ACI_CLIENT_NAME }}" --resource-group "${{ secrets.ACI_RESOURCE_GROUP }}" --yes || true
+          az container delete --name "$CLIENT_NAME" --resource-group "$RG" --yes || true
           
           az container create \
-            --name "${{ secrets.ACI_CLIENT_NAME }}" \
-            --resource-group "${{ secrets.ACI_RESOURCE_GROUP }}" \
+            --name "$CLIENT_NAME" \
+            --resource-group "$RG" \
             --location centralindia \
-            --image "${{ secrets.ACR_LOGIN_SERVER }}/client:${{ github.sha }}" \
-            --registry-login-server "${{ secrets.ACR_LOGIN_SERVER }}" \
-            --registry-username "${{ secrets.ACR_USERNAME }}" \
-            --registry-password "${{ secrets.ACR_PASSWORD }}" \
+            --image "$LOGIN_SERVER/client:${{ github.sha }}" \
+            --registry-login-server "$LOGIN_SERVER" \
+            --registry-username "$USERNAME" \
+            --registry-password "$PASSWORD" \
             --dns-name-label client-${{ github.run_number }} \
             --ports 3000 \
-            --environment-variables NEXT_PUBLIC_API_URL="http://${{ secrets.ACI_SERVER_NAME }}.centralindia.azurecontainer.io:8080" \
+            --environment-variables NEXT_PUBLIC_API_URL="http://$SERVER_NAME.centralindia.azurecontainer.io:8080" \
             --cpu 1 --memory 1.5
           
           # 2. Recreate Server Container
-          az container delete --name "${{ secrets.ACI_SERVER_NAME }}" --resource-group "${{ secrets.ACI_RESOURCE_GROUP }}" --yes || true
+          az container delete --name "$SERVER_NAME" --resource-group "$RG" --yes || true
           
           az container create \
-            --name "${{ secrets.ACI_SERVER_NAME }}" \
-            --resource-group "${{ secrets.ACI_RESOURCE_GROUP }}" \
+            --name "$SERVER_NAME" \
+            --resource-group "$RG" \
             --location centralindia \
-            --image "${{ secrets.ACR_LOGIN_SERVER }}/server:${{ github.sha }}" \
-            --registry-login-server "${{ secrets.ACR_LOGIN_SERVER }}" \
-            --registry-username "${{ secrets.ACR_USERNAME }}" \
-            --registry-password "${{ secrets.ACR_PASSWORD }}" \
+            --image "$LOGIN_SERVER/server:${{ github.sha }}" \
+            --registry-login-server "$LOGIN_SERVER" \
+            --registry-username "$USERNAME" \
+            --registry-password "$PASSWORD" \
             --dns-name-label server-${{ github.run_number }} \
             --ports 8080 \
             --cpu 1 --memory 1.5
