@@ -54,7 +54,7 @@ jobs:
           # To force an image pull, we must delete the current container and recreate it.
           
           # 1. Recreate Client Container
-          az container delete --name ${{ secrets.ACI_CLIENT_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} --yes
+          az container delete --name ${{ secrets.ACI_CLIENT_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} --yes || true
           
           az container create \
             --name ${{ secrets.ACI_CLIENT_NAME }} \
@@ -70,7 +70,7 @@ jobs:
             --cpu 1 --memory 1.5
           
           # 2. Recreate Server Container
-          az container delete --name ${{ secrets.ACI_SERVER_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} --yes
+          az container delete --name ${{ secrets.ACI_SERVER_NAME }} --resource-group ${{ secrets.ACI_RESOURCE_GROUP }} --yes || true
           
           az container create \
             --name ${{ secrets.ACI_SERVER_NAME }} \
