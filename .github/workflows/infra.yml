@@ -95,11 +95,11 @@ jobs:
           
           # Force break any stuck Terraform state lease from previously cancelled runs!
           echo "Force unlocking Terraform state blob from dead runs..."
-          az storage blob lease break --blob-name teastall.terraform.tfstate --container-name tfstate --account-name ${{ env.TF_STATE_ACCOUNT }} --auth-mode login || true
+          az storage blob lease break --blob-name teastall.terraform.tfstate --container-name tfstate --account-name $TF_STATE_ACCOUNT --auth-mode login || true
           
           terraform init \
             -backend-config="resource_group_name=$RG_NAME" \
-            -backend-config="storage_account_name=${{ env.TF_STATE_ACCOUNT }}" \
+            -backend-config="storage_account_name=$TF_STATE_ACCOUNT" \
             -backend-config="container_name=tfstate" \
             -backend-config="key=teastall.terraform.tfstate"
 
@@ -131,7 +131,7 @@ jobs:
             -var="acr_password=$ACR_PASSWORD" \
             -var="server_name=$SERVER_NAME" \
             -var="client_name=$CLIENT_NAME" \
-            -var="tf_state_storage_account=${{ env.TF_STATE_ACCOUNT }}" \
+            -var="tf_state_storage_account=$TF_STATE_ACCOUNT" \
             -var="active_color=blue" \
             -var="blue_image_tag=$IMAGE_TAG" \
             -var="green_image_tag=$IMAGE_TAG" \

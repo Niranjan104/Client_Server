@@ -116,7 +116,7 @@ resource "azurerm_container_group" "client_blue" {
 
   container {
     name   = "client-blue"
-    image  = var.blue_image_tag == "initial" ? "mcr.microsoft.com/azuredocs/aci-helloworld" : "${azurerm_container_registry.acr.login_server}/client-blue:${var.blue_image_tag}"
+    image  = var.blue_image_tag == "initial" ? "mcr.microsoft.com/azuredocs/aci-helloworld" : "${azurerm_container_registry.acr.login_server}/client:${var.blue_image_tag}"
     cpu    = "0.5"
     memory = "1"
 
@@ -144,7 +144,7 @@ resource "azurerm_container_group" "client_green" {
 
   container {
     name   = "client-green"
-    image  = var.green_image_tag == "initial" ? "mcr.microsoft.com/azuredocs/aci-helloworld" : "${azurerm_container_registry.acr.login_server}/client-green:${var.green_image_tag}"
+    image  = var.green_image_tag == "initial" ? "mcr.microsoft.com/azuredocs/aci-helloworld" : "${azurerm_container_registry.acr.login_server}/client:${var.green_image_tag}"
     cpu    = "0.5"
     memory = "1"
 

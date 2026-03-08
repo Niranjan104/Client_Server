@@ -7,7 +7,7 @@ on:
       - completed
     branches:
       - main
-  workflow_dispatch:  # allows manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -18,73 +18,81 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # ── 1. Build & Push Images ─────────────────────────────────────────────
-      - name: Export Sanitized ACR Credentials
-        run: |
-          echo "CLEAN_LOGIN_SERVER=$(echo '${{ secrets.ACR_LOGIN_SERVER }}' | tr -d '\r\n')" >> $GITHUB_ENV
-          echo "CLEAN_USERNAME=$(echo '${{ secrets.ACR_USERNAME }}' | tr -d '\r\n')" >> $GITHUB_ENV
-          echo "CLEAN_PASSWORD=$(echo '${{ secrets.ACR_PASSWORD }}' | tr -d '\r\n')" >> $GITHUB_ENV
-
-      - name: Log in to Azure Container Registry (ACR)
-        uses: azure/docker-login@v2
-        with:
-          login-server: ${{ env.CLEAN_LOGIN_SERVER }}
-          username: ${{ env.CLEAN_USERNAME }}
-          password: ${{ env.CLEAN_PASSWORD }}
-
-      - name: Build and Push Server Image
-        run: |
-          docker build \
-            -t ${{ env.CLEAN_LOGIN_SERVER }}/server:${{ github.sha }} \
-            -t ${{ env.CLEAN_LOGIN_SERVER }}/server:latest \
-            ./server
-          docker push ${{ env.CLEAN_LOGIN_SERVER }}/server:${{ github.sha }}
-          docker push ${{ env.CLEAN_LOGIN_SERVER }}/server:latest
-
-      - name: Build and Push Client Image
-        run: |
-          # Strip hidden newlines from user secret
-          NGINX_LABEL=$(echo "${{ secrets.NGINX_DNS_LABEL }}" | tr -d '\r\n')
-          
-          # NEXT_PUBLIC_* vars are baked at build time — point to the NGINX router (fixed DNS)
-          docker build \
-            --build-arg NEXT_PUBLIC_API_URL="http://${NGINX_LABEL}.centralindia.azurecontainer.io/api" \
-            -t ${{ env.CLEAN_LOGIN_SERVER }}/client:${{ github.sha }} \
-            -t ${{ env.CLEAN_LOGIN_SERVER }}/client:latest \
-            ./client
-          docker push ${{ env.CLEAN_LOGIN_SERVER }}/client:${{ github.sha }}
-          docker push ${{ env.CLEAN_LOGIN_SERVER }}/client:latest
-
-      - name: Build and Push NGINX Image
-        run: |
-          docker build \
-            -t ${{ env.CLEAN_LOGIN_SERVER }}/nginx:${{ github.sha }} \
-            -t ${{ env.CLEAN_LOGIN_SERVER }}/nginx:latest \
-            ./nginx
-          docker push ${{ env.CLEAN_LOGIN_SERVER }}/nginx:${{ github.sha }}
-          docker push ${{ env.CLEAN_LOGIN_SERVER }}/nginx:latest
-
-      # ── 2. Azure Login ─────────────────────────────────────────────────────
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # ── 3. Blue/Green Rotation ─────────────────────────────────────────────
+      - name: Resolve ACR Credentials
+        id: acr
+        run: |
+          CLEAN_LOGIN_SERVER=$(echo "${{ secrets.ACR_LOGIN_SERVER }}" | tr -d '\r\n')
+          ACR_NAME=$(echo "$CLEAN_LOGIN_SERVER" | cut -d'.' -f1)
+
+          if [ -z "$CLEAN_LOGIN_SERVER" ] || [ -z "$ACR_NAME" ]; then
+            echo "::error::ACR_LOGIN_SERVER secret is missing or invalid."
+            exit 1
+          fi
+
+          ACR_USERNAME=$(az acr credential show --name "$ACR_NAME" --query "username" -o tsv | tr -d '\r\n')
+          ACR_PASSWORD=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" -o tsv | tr -d '\r\n')
+
+          if [ -z "$ACR_USERNAME" ] || [ -z "$ACR_PASSWORD" ]; then
+            echo "::error::Could not resolve ACR credentials. Ensure admin user is enabled on ACR."
+            exit 1
+          fi
+
+          echo "login_server=$CLEAN_LOGIN_SERVER" >> $GITHUB_OUTPUT
+          echo "username=$ACR_USERNAME" >> $GITHUB_OUTPUT
+          echo "password=$ACR_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Log in to ACR for Docker Push
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.acr.outputs.login_server }}
+          username: ${{ steps.acr.outputs.username }}
+          password: ${{ steps.acr.outputs.password }}
+
+      - name: Build and Push Server Image
+        run: |
+          docker build \
+            -t ${{ steps.acr.outputs.login_server }}/server:${{ github.sha }} \
+            -t ${{ steps.acr.outputs.login_server }}/server:latest \
+            ./server
+          docker push ${{ steps.acr.outputs.login_server }}/server:${{ github.sha }}
+          docker push ${{ steps.acr.outputs.login_server }}/server:latest
+
+      - name: Build and Push Client Image
+        run: |
+          NGINX_LABEL=$(echo "${{ secrets.NGINX_DNS_LABEL }}" | tr -d '\r\n')
+
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL="http://${NGINX_LABEL}.centralindia.azurecontainer.io/api" \
+            -t ${{ steps.acr.outputs.login_server }}/client:${{ github.sha }} \
+            -t ${{ steps.acr.outputs.login_server }}/client:latest \
+            ./client
+          docker push ${{ steps.acr.outputs.login_server }}/client:${{ github.sha }}
+          docker push ${{ steps.acr.outputs.login_server }}/client:latest
+
+      - name: Build and Push NGINX Image
+        run: |
+          docker build \
+            -t ${{ steps.acr.outputs.login_server }}/nginx:${{ github.sha }} \
+            -t ${{ steps.acr.outputs.login_server }}/nginx:latest \
+            ./nginx
+          docker push ${{ steps.acr.outputs.login_server }}/nginx:${{ github.sha }}
+          docker push ${{ steps.acr.outputs.login_server }}/nginx:latest
+
       - name: Deploy to Inactive Slot and Flip Traffic
         run: |
-          # Strip hidden CR/LF from secrets
-          RG=$(echo "${{ secrets.ACI_RESOURCE_GROUP }}"  | tr -d '\r\n')
-          LOGIN_SERVER=$(echo "${{ secrets.ACR_LOGIN_SERVER }}" | tr -d '\r\n')
-          USERNAME=$(echo "${{ secrets.ACR_USERNAME }}"   | tr -d '\r\n')
-          PASSWORD=$(echo "${{ secrets.ACR_PASSWORD }}"   | tr -d '\r\n')
+          RG=$(echo "${{ secrets.ACI_RESOURCE_GROUP }}" | tr -d '\r\n')
+          LOGIN_SERVER=$(echo "${{ steps.acr.outputs.login_server }}" | tr -d '\r\n')
+          USERNAME=$(echo "${{ steps.acr.outputs.username }}" | tr -d '\r\n')
+          PASSWORD=$(echo "${{ steps.acr.outputs.password }}" | tr -d '\r\n')
           NGINX_LABEL=$(echo "${{ secrets.NGINX_DNS_LABEL }}" | tr -d '\r\n')
           SERVER_BASE=$(echo "${{ secrets.SERVER_BASE_NAME }}" | tr -d '\r\n')
           CLIENT_BASE=$(echo "${{ secrets.CLIENT_BASE_NAME }}" | tr -d '\r\n')
 
-          # ── Step 1: Find which slot is currently live ──────────────────────
-          # We check the ACTIVE_COLOR environment variable on the existing NGINX container.
-          # On the very first deployment, there is no NGINX container yet → default to blue.
           ACTIVE_COLOR=$(az container show \
             --name "$NGINX_LABEL" \
             --resource-group "$RG" \
@@ -104,14 +112,11 @@ jobs:
           echo "Current active slot : $ACTIVE_COLOR"
           echo "Deploying to slot   : $INACTIVE_COLOR"
 
-          # Fixed DNS hostnames for all 4 app containers
           BLUE_SERVER_HOST="${SERVER_BASE}-blue.centralindia.azurecontainer.io"
           GREEN_SERVER_HOST="${SERVER_BASE}-green.centralindia.azurecontainer.io"
           BLUE_CLIENT_HOST="${CLIENT_BASE}-blue.centralindia.azurecontainer.io"
           GREEN_CLIENT_HOST="${CLIENT_BASE}-green.centralindia.azurecontainer.io"
 
-          # ── Step 2: Deploy new image to INACTIVE server slot ───────────────
-          # The ACTIVE slot is untouched — users keep browsing while we update green.
           echo "Deploying new server image to ${SERVER_BASE}-${INACTIVE_COLOR} ..."
           az container delete \
             --name "${SERVER_BASE}-${INACTIVE_COLOR}" \
@@ -132,7 +137,6 @@ jobs:
             --environment-variables APP_VERSION="$INACTIVE_COLOR" PORT="8080" \
             --cpu 0.5 --memory 1
 
-          # ── Step 3: Deploy new image to INACTIVE client slot ───────────────
           echo "Deploying new client image to ${CLIENT_BASE}-${INACTIVE_COLOR} ..."
           az container delete \
             --name "${CLIENT_BASE}-${INACTIVE_COLOR}" \
@@ -152,7 +156,6 @@ jobs:
             --ports 3000 \
             --cpu 0.5 --memory 1
 
-          # ── Step 4: Wait for inactive slot to become healthy ───────────────
           echo "Waiting 45s for ${INACTIVE_COLOR} slot to start..."
           sleep 45
 
@@ -162,14 +165,13 @@ jobs:
           echo "Smoke testing backend: $INACTIVE_SERVER_URL"
           echo "Smoke testing frontend: $INACTIVE_CLIENT_URL"
 
-          # Retry smoke test up to 5 times for BOTH containers
           SMOKE_PASSED=false
           for i in 1 2 3 4 5; do
             SERVER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$INACTIVE_SERVER_URL" --max-time 10 || echo "000")
             CLIENT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$INACTIVE_CLIENT_URL" --max-time 10 || echo "000")
-            
+
             echo "  Attempt $i: Backend HTTP $SERVER_STATUS | Frontend HTTP $CLIENT_STATUS"
-            
+
             if [ "$SERVER_STATUS" = "200" ] && [ "$CLIENT_STATUS" = "200" ]; then
               SMOKE_PASSED=true
               break
@@ -177,23 +179,19 @@ jobs:
             sleep 15
           done
 
-          # ── Step 5: Result — either flip traffic or rollback ───────────────
           if [ "$SMOKE_PASSED" != "true" ]; then
             echo "::error::Smoke test FAILED on ${INACTIVE_COLOR} slot."
             echo "Rollback initiated: Tearing down broken ${INACTIVE_COLOR} containers..."
-            
+
             az container delete --name "${SERVER_BASE}-${INACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || true
             az container delete --name "${CLIENT_BASE}-${INACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || true
-            
+
             echo "Rollback complete. Active slot (${ACTIVE_COLOR}) unchanged and remains live."
             exit 1
           fi
 
-          echo "Smoke tests PASSED. Flipping NGINX from ${ACTIVE_COLOR} → ${INACTIVE_COLOR} ..."
+          echo "Smoke tests PASSED. Flipping NGINX from ${ACTIVE_COLOR} -> ${INACTIVE_COLOR} ..."
 
-          # ── Step 6: Update NGINX to point to the new active slot ───────
-          # Instead of destroying and recreating the gateway (which causes 5-10s hard downtime),
-          # we execute an in-place update which allows Azure to gracefully restart the container
           az container create \
             --name "$NGINX_LABEL" \
             --resource-group "$RG" \
@@ -214,17 +212,16 @@ jobs:
                 RESOLVER_IP="168.63.129.16" \
             --cpu 0.25 --memory 0.5
 
-          # ── Step 7: Teardown the old environment (Cost Savings) ───────────
           if [ "$ACTIVE_COLOR" != "blue" ] && [ "$ACTIVE_COLOR" != "green" ]; then
             echo "Initial deployment detected. No old containers to teardown."
           else
             echo "Traffic successfully routed to ${INACTIVE_COLOR}."
-            echo "Tearing down old ${ACTIVE_COLOR} slot to save Azure billing costs..."
+            echo "Tearing down old ${ACTIVE_COLOR} slot to save Azure costs..."
             az container delete --name "${SERVER_BASE}-${ACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || echo "Server delete skipped/failed"
             az container delete --name "${CLIENT_BASE}-${ACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || echo "Client delete skipped/failed"
           fi
 
           echo ""
-          echo "✅ Deployment complete!"
-          echo "   Active slot : $INACTIVE_COLOR"
-          echo "   Public URL  : http://$NGINX_LABEL.centralindia.azurecontainer.io"
+          echo "Deployment complete."
+          echo "  Active slot : $INACTIVE_COLOR"
+          echo "  Public URL  : http://$NGINX_LABEL.centralindia.azurecontainer.io"
