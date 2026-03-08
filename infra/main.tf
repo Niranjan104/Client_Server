@@ -211,7 +211,6 @@ resource "azurerm_container_group" "monitoring" {
 
   container {
     name   = "prometheus"
-    image  = "prom/prometheus:latest"
     cpu    = "0.5"
     memory = "1"
 
@@ -220,9 +219,15 @@ resource "azurerm_container_group" "monitoring" {
       protocol = "TCP"
     }
 
-    # Mount the custom scraping configuration from Azure File Share 
-    # (Or in our CI/CD case, we can pass it as a custom built image. Let's assume custom Built Image)
-    image  = "${azurerm_container_registry.acr.login_server}/monitoring:latest"
+    # Natively mount the custom scraping configuration via ACI secrets
+    # This bypasses the need for custom external Docker images!
+    volume {
+      name       = "promconfig"
+      mount_path = "/etc/prometheus"
+      secret = {
+        "prometheus.yml" = base64encode(file("${path.module}/../monitoring/prometheus.yml"))
+      }
+    }
   }
 
   container {

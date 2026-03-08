@@ -101,7 +101,7 @@ jobs:
         id: plan
         run: |
           RG_NAME=$(echo '${{ secrets.ACI_RESOURCE_GROUP }}' | tr -d '\r\n')
-          ACR_NAME=$(echo '${{ secrets.ACR_NAME }}' | tr -d '\r\n')
+          ACR_NAME=$(echo '${{ secrets.ACR_LOGIN_SERVER }}' | cut -d'.' -f1 | tr -d '\r\n')
           ACR_USERNAME=$(echo '${{ secrets.ACR_USERNAME }}' | tr -d '\r\n')
           ACR_PASSWORD=$(echo '${{ secrets.ACR_PASSWORD }}' | tr -d '\r\n')
           SERVER_NAME=$(echo '${{ secrets.SERVER_BASE_NAME }}' | tr -d '\r\n')
