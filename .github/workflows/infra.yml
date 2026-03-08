@@ -89,8 +89,10 @@ jobs:
 
       - name: Terraform Init
         run: |
+          RG_NAME=$(echo '${{ secrets.ACI_RESOURCE_GROUP }}' | tr -d '\r\n')
+          
           terraform init \
-            -backend-config="resource_group_name=${{ secrets.ACI_RESOURCE_GROUP }}" \
+            -backend-config="resource_group_name=$RG_NAME" \
             -backend-config="storage_account_name=${{ env.TF_STATE_ACCOUNT }}" \
             -backend-config="container_name=tfstate" \
             -backend-config="key=teastall.terraform.tfstate"
@@ -98,13 +100,20 @@ jobs:
       - name: Terraform Plan
         id: plan
         run: |
+          RG_NAME=$(echo '${{ secrets.ACI_RESOURCE_GROUP }}' | tr -d '\r\n')
+          ACR_NAME=$(echo '${{ secrets.ACR_NAME }}' | tr -d '\r\n')
+          ACR_USERNAME=$(echo '${{ secrets.ACR_USERNAME }}' | tr -d '\r\n')
+          ACR_PASSWORD=$(echo '${{ secrets.ACR_PASSWORD }}' | tr -d '\r\n')
+          SERVER_NAME=$(echo '${{ secrets.SERVER_BASE_NAME }}' | tr -d '\r\n')
+          CLIENT_NAME=$(echo '${{ secrets.CLIENT_BASE_NAME }}' | tr -d '\r\n')
+
           terraform plan \
-            -var="resource_group_name=${{ secrets.ACI_RESOURCE_GROUP }}" \
-            -var="acr_name=${{ secrets.ACR_NAME }}" \
-            -var="acr_username=${{ secrets.ACR_USERNAME }}" \
-            -var="acr_password=${{ secrets.ACR_PASSWORD }}" \
-            -var="server_name=${{ secrets.SERVER_BASE_NAME }}" \
-            -var="client_name=${{ secrets.CLIENT_BASE_NAME }}" \
+            -var="resource_group_name=$RG_NAME" \
+            -var="acr_name=$ACR_NAME" \
+            -var="acr_username=$ACR_USERNAME" \
+            -var="acr_password=$ACR_PASSWORD" \
+            -var="server_name=$SERVER_NAME" \
+            -var="client_name=$CLIENT_NAME" \
             -var="tf_state_storage_account=${{ env.TF_STATE_ACCOUNT }}" \
             -var="active_color=blue" \
             -var="blue_image_tag=latest" \
