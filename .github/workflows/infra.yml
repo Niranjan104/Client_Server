@@ -40,12 +40,24 @@ jobs:
 
           # 1. Provide absolute Subscription Context and scrub hidden hidden CR/LFs
           export SUB_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .subscriptionId | tr -d '\r\n')
-          az account set --subscription "$SUB_ID"
 
           # 2. Wait up to 60 seconds if Role Assignment hasn't propagated yet
-          for i in {1..5}; do
-            az group create --subscription "$SUB_ID" --name "$RG_NAME" --location "$LOCATION" --output none && break || echo "Waiting 15s for new Service Principal role propagation..."; sleep 15
+          # GitHub Actions bash doesn't process brace expansion {1..5} reliably
+          SUCCESS=false
+          for i in 1 2 3 4 5; do
+            echo "Attempt $i: Connecting to Subscription $SUB_ID..."
+            az account set --subscription "$SUB_ID" && \
+            az group create --subscription "$SUB_ID" --name "$RG_NAME" --location "$LOCATION" --output none && \
+            SUCCESS=true && break
+            
+            echo "Waiting 15s for new Service Principal role propagation..."
+            sleep 15
           done
+
+          if [ "$SUCCESS" != "true" ]; then
+            echo "::error::Failed to access Subscription $SUB_ID. The Service Principal Role Assignment has not propagated yet, or was created incorrectly."
+            exit 1
+          fi
           
           # Check if storage account already exists in this RG
           EXISTING_SA=$(az storage account list --subscription "$SUB_ID" -g "$RG_NAME" --query "[?starts_with(name, 'tfstate')].name" -o tsv | head -n 1 | tr -d '\r\n')
