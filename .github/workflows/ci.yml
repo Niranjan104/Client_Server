@@ -35,11 +35,11 @@ jobs:
 
       - name: Lint
         working-directory: ${{ matrix.app }}
-        run: npm run lint --if-present
+        run: npm run lint
 
       - name: Test
         working-directory: ${{ matrix.app }}
-        run: npm test --if-present
+        run: npm test -- --ci
 
       - name: Build (client only)
         if: matrix.app == 'client'

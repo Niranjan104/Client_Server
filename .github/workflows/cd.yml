@@ -26,14 +26,25 @@ jobs:
       - name: Resolve ACR Credentials
         id: acr
         run: |
-          CLEAN_LOGIN_SERVER=$(echo "${{ secrets.ACR_LOGIN_SERVER }}" | tr -d '\r\n')
-          ACR_NAME=$(echo "$CLEAN_LOGIN_SERVER" | cut -d'.' -f1)
+          ACR_NAME=$(echo "${{ secrets.ACR_NAME }}" | tr -d '\r\n')
 
-          if [ -z "$CLEAN_LOGIN_SERVER" ] || [ -z "$ACR_NAME" ]; then
-            echo "::error::ACR_LOGIN_SERVER secret is missing or invalid."
+          if [ -z "$ACR_NAME" ]; then
+            echo "::error::ACR_NAME secret is missing."
             exit 1
           fi
 
+          if ! echo "$ACR_NAME" | grep -Eq '^[a-z0-9]{5,50}$'; then
+            echo "::error::ACR_NAME '$ACR_NAME' is invalid. Use 5-50 lowercase alphanumeric characters."
+            exit 1
+          fi
+
+          CLEAN_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query "loginServer" -o tsv | tr -d '\r\n')
+          if [ -z "$CLEAN_LOGIN_SERVER" ]; then
+            echo "::error::Could not resolve ACR login server from Azure for registry '$ACR_NAME'."
+            exit 1
+          fi
+
+          az acr update --name "$ACR_NAME" --admin-enabled true --output none
           ACR_USERNAME=$(az acr credential show --name "$ACR_NAME" --query "username" -o tsv | tr -d '\r\n')
           ACR_PASSWORD=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" -o tsv | tr -d '\r\n')
 

@@ -84,29 +84,21 @@ jobs:
           echo "ARM_SUBSCRIPTION_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .subscriptionId | tr -d '\r\n')" >> $GITHUB_ENV
           echo "ARM_TENANT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .tenantId | tr -d '\r\n')" >> $GITHUB_ENV
 
-      - name: Resolve ACR Credentials
+      - name: Resolve ACR Name
         run: |
-          CLEAN_LOGIN_SERVER=$(echo '${{ secrets.ACR_LOGIN_SERVER }}' | tr -d '\r\n')
-          ACR_NAME=$(echo "$CLEAN_LOGIN_SERVER" | cut -d'.' -f1)
+          ACR_NAME=$(echo '${{ secrets.ACR_NAME }}' | tr -d '\r\n')
 
-          if [ -z "$CLEAN_LOGIN_SERVER" ] || [ -z "$ACR_NAME" ]; then
-            echo "::error::ACR_LOGIN_SERVER secret is missing or invalid."
+          if [ -z "$ACR_NAME" ]; then
+            echo "::error::ACR_NAME secret is missing."
             exit 1
           fi
 
-          # Ensure runtime pull credentials are available and current.
-          az acr update --name "$ACR_NAME" --admin-enabled true --output none
-          ACR_USERNAME=$(az acr credential show --name "$ACR_NAME" --query "username" -o tsv | tr -d '\r\n')
-          ACR_PASSWORD=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" -o tsv | tr -d '\r\n')
-
-          if [ -z "$ACR_USERNAME" ] || [ -z "$ACR_PASSWORD" ]; then
-            echo "::error::Failed to fetch ACR credentials from Azure."
+          if ! echo "$ACR_NAME" | grep -Eq '^[a-z0-9]{5,50}$'; then
+            echo "::error::ACR_NAME '$ACR_NAME' is invalid. Use 5-50 lowercase alphanumeric characters."
             exit 1
           fi
 
           echo "ACR_NAME=$ACR_NAME" >> $GITHUB_ENV
-          echo "ACR_USERNAME_RUNTIME=$ACR_USERNAME" >> $GITHUB_ENV
-          echo "ACR_PASSWORD_RUNTIME=$ACR_PASSWORD" >> $GITHUB_ENV
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -127,11 +119,49 @@ jobs:
             -backend-config="container_name=tfstate" \
             -backend-config="key=teastall.terraform.tfstate"
 
+      - name: Bootstrap ACR if Missing
+        run: |
+          RG_NAME=$(echo '${{ secrets.ACI_RESOURCE_GROUP }}' | tr -d '\r\n')
+          SERVER_NAME=$(echo '${{ secrets.SERVER_BASE_NAME }}' | tr -d '\r\n')
+          CLIENT_NAME=$(echo '${{ secrets.CLIENT_BASE_NAME }}' | tr -d '\r\n')
+
+          if az acr show --name "$ACR_NAME" --query "name" --output tsv >/dev/null 2>&1; then
+            echo "ACR '$ACR_NAME' already exists. Skipping bootstrap."
+            exit 0
+          fi
+
+          echo "ACR '$ACR_NAME' not found. Creating it via targeted Terraform apply..."
+          terraform apply -auto-approve \
+            -target=azurerm_container_registry.acr \
+            -var="resource_group_name=$RG_NAME" \
+            -var="acr_name=$ACR_NAME" \
+            -var="acr_username=bootstrap" \
+            -var="acr_password=bootstrap" \
+            -var="server_name=$SERVER_NAME" \
+            -var="client_name=$CLIENT_NAME" \
+            -var="tf_state_storage_account=$TF_STATE_ACCOUNT" \
+            -var="active_color=blue" \
+            -var="blue_image_tag=initial" \
+            -var="green_image_tag=initial"
+
+      - name: Resolve ACR Credentials
+        run: |
+          az acr update --name "$ACR_NAME" --admin-enabled true --output none
+          ACR_USERNAME=$(az acr credential show --name "$ACR_NAME" --query "username" -o tsv | tr -d '\r\n')
+          ACR_PASSWORD=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" -o tsv | tr -d '\r\n')
+
+          if [ -z "$ACR_USERNAME" ] || [ -z "$ACR_PASSWORD" ]; then
+            echo "::error::Failed to fetch ACR credentials from Azure."
+            exit 1
+          fi
+
+          echo "ACR_USERNAME_RUNTIME=$ACR_USERNAME" >> $GITHUB_ENV
+          echo "ACR_PASSWORD_RUNTIME=$ACR_PASSWORD" >> $GITHUB_ENV
+
       - name: Terraform Plan
         id: plan
         run: |
           RG_NAME=$(echo '${{ secrets.ACI_RESOURCE_GROUP }}' | tr -d '\r\n')
-          ACR_NAME=$(echo "$ACR_NAME" | tr -d '\r\n')
           ACR_USERNAME=$(echo "$ACR_USERNAME_RUNTIME" | tr -d '\r\n')
           ACR_PASSWORD=$(echo "$ACR_PASSWORD_RUNTIME" | tr -d '\r\n')
           SERVER_NAME=$(echo '${{ secrets.SERVER_BASE_NAME }}' | tr -d '\r\n')
