@@ -38,18 +38,20 @@ jobs:
           STORAGE_ACCOUNT_NAME="tfstate$(date +%s%N | cut -c1-6)"
           CONTAINER_NAME="tfstate"
 
-          # 1. Provide absolute Subscription Context and scrub hidden hidden CR/LFs
+          # 1. Establish absolute Subscription Context
           export SUB_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .subscriptionId | tr -d '\r\n')
+          az account set --subscription "$SUB_ID"
 
-          # 2. Wait up to 60 seconds if Role Assignment hasn't propagated yet
-          # GitHub Actions bash doesn't process brace expansion {1..5} reliably
+          # 2. Register required resource providers (resolves false-positive SubscriptionNotFound errors)
+          echo "Ensuring required Azure Resource Providers are registered..."
+          az provider register --namespace Microsoft.Storage
+          az provider register --namespace Microsoft.ContainerInstance
+
+          # 3. Wait up to 60 seconds if Role Assignment hasn't propagated yet
           SUCCESS=false
           for i in 1 2 3 4 5; do
             echo "Attempt $i: Connecting to Subscription $SUB_ID..."
-            az account set --subscription "$SUB_ID" && \
-            az group create --subscription "$SUB_ID" --name "$RG_NAME" --location "$LOCATION" --output none && \
-            SUCCESS=true && break
-            
+            az group create --name "$RG_NAME" --location "$LOCATION" --output none && SUCCESS=true && break
             echo "Waiting 15s for new Service Principal role propagation..."
             sleep 15
           done
@@ -60,12 +62,12 @@ jobs:
           fi
           
           # Check if storage account already exists in this RG
-          EXISTING_SA=$(az storage account list --subscription "$SUB_ID" -g "$RG_NAME" --query "[?starts_with(name, 'tfstate')].name" -o tsv | head -n 1 | tr -d '\r\n')
+          EXISTING_SA=$(az storage account list -g "$RG_NAME" --query "[?starts_with(name, 'tfstate')].name" -o tsv | head -n 1 | tr -d '\r\n')
           
           if [ -z "$EXISTING_SA" ]; then
             echo "Creating new Storage Account: $STORAGE_ACCOUNT_NAME for Terraform State..."
-            az storage account create --subscription "$SUB_ID" --resource-group "$RG_NAME" --name "$STORAGE_ACCOUNT_NAME" --sku Standard_LRS --encryption-services blob --min-tls-version TLS1_2 --output none
-            az storage container create --subscription "$SUB_ID" --name "$CONTAINER_NAME" --account-name "$STORAGE_ACCOUNT_NAME" --auth-mode login --output none
+            az storage account create --resource-group "$RG_NAME" --name "$STORAGE_ACCOUNT_NAME" --sku Standard_LRS --encryption-services blob --min-tls-version TLS1_2 --output none
+            az storage container create --account-name "$STORAGE_ACCOUNT_NAME" --name "$CONTAINER_NAME" --auth-mode login --output none
             
             echo "TF_STATE_ACCOUNT=$STORAGE_ACCOUNT_NAME" >> $GITHUB_ENV
           else
