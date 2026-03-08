@@ -113,6 +113,17 @@ jobs:
           SERVER_NAME=$(echo '${{ secrets.SERVER_BASE_NAME }}' | tr -d '\r\n')
           CLIENT_NAME=$(echo '${{ secrets.CLIENT_BASE_NAME }}' | tr -d '\r\n')
 
+          # To break the cyclic dependency between Terraform building the registry and the CD pipeline
+          # pushing the images, we dynamically check if the ACR actually has our images yet.
+          # If it doesn't, we instruct Terraform to use public placeholder images ("initial" tag).
+          if az acr repository show --name "$ACR_NAME" --image server:latest &> /dev/null; then
+            echo "Custom images found in registry. Deploying latest application builds."
+            IMAGE_TAG="latest"
+          else
+            echo "Registry is empty (First Run). Deploying public placeholder images."
+            IMAGE_TAG="initial"
+          fi
+
           terraform plan \
             -var="resource_group_name=$RG_NAME" \
             -var="acr_name=$ACR_NAME" \
@@ -122,8 +133,8 @@ jobs:
             -var="client_name=$CLIENT_NAME" \
             -var="tf_state_storage_account=${{ env.TF_STATE_ACCOUNT }}" \
             -var="active_color=blue" \
-            -var="blue_image_tag=latest" \
-            -var="green_image_tag=latest" \
+            -var="blue_image_tag=$IMAGE_TAG" \
+            -var="green_image_tag=$IMAGE_TAG" \
             -out=tfplan
 
       - name: Terraform Apply

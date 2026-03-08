@@ -50,7 +50,7 @@ resource "azurerm_container_group" "server_blue" {
 
   container {
     name   = "server-blue"
-    image  = "${azurerm_container_registry.acr.login_server}/server:${var.blue_image_tag}"
+    image  = var.blue_image_tag == "initial" ? "mcr.microsoft.com/azuredocs/aci-helloworld" : "${azurerm_container_registry.acr.login_server}/server:${var.blue_image_tag}"
     cpu    = "0.5"
     memory = "1"
 
@@ -83,7 +83,7 @@ resource "azurerm_container_group" "server_green" {
 
   container {
     name   = "server-green"
-    image  = "${azurerm_container_registry.acr.login_server}/server:${var.green_image_tag}"
+    image  = var.green_image_tag == "initial" ? "mcr.microsoft.com/azuredocs/aci-helloworld" : "${azurerm_container_registry.acr.login_server}/server:${var.green_image_tag}"
     cpu    = "0.5"
     memory = "1"
 
@@ -116,7 +116,7 @@ resource "azurerm_container_group" "client_blue" {
 
   container {
     name   = "client-blue"
-    image  = "${azurerm_container_registry.acr.login_server}/client-blue:${var.blue_image_tag}"
+    image  = var.blue_image_tag == "initial" ? "mcr.microsoft.com/azuredocs/aci-helloworld" : "${azurerm_container_registry.acr.login_server}/client-blue:${var.blue_image_tag}"
     cpu    = "0.5"
     memory = "1"
 
@@ -144,7 +144,7 @@ resource "azurerm_container_group" "client_green" {
 
   container {
     name   = "client-green"
-    image  = "${azurerm_container_registry.acr.login_server}/client-green:${var.green_image_tag}"
+    image  = var.green_image_tag == "initial" ? "mcr.microsoft.com/azuredocs/aci-helloworld" : "${azurerm_container_registry.acr.login_server}/client-green:${var.green_image_tag}"
     cpu    = "0.5"
     memory = "1"
 
@@ -172,7 +172,8 @@ resource "azurerm_container_group" "nginx" {
 
   container {
     name   = "nginx-router"
-    image  = "${azurerm_container_registry.acr.login_server}/nginx:latest"
+    # We use a public nginx image to bootstrap the gateway if the custom one is missing
+    image  = var.blue_image_tag == "initial" ? "nginx:alpine" : "${azurerm_container_registry.acr.login_server}/nginx:latest"
     cpu    = "0.25"
     memory = "0.5"
 
