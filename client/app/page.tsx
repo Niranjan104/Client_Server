@@ -161,7 +161,7 @@ export default function Home() {
             <div className="p-2 bg-orange-500 rounded-lg text-white">
               <Coffee size={28} strokeWidth={2.5} />
             </div>
-            <h1 className="text-2xl font-bold text-orange-900 tracking-tight">Nira's Premium Tea Stall</h1>
+            <h1 className="text-2xl font-bold text-orange-900 tracking-tight">Nira Premium Tea Stall</h1>
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-full border border-green-200 text-sm font-medium">
