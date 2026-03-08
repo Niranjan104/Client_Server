@@ -31,24 +31,32 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
           
       - name: Create Terraform State Storage (Bootstrapping)
-        # Terraform needs somewhere to securely save its "state file".
-        # This bash script automatically provisions an Azure Storage Account exclusively for Terraform State
-        # BEFORE Terraform even runs, ensuring a truly hands-off zero-to-hero experience.
         run: |
           RG_NAME=$(echo "${{ secrets.ACI_RESOURCE_GROUP }}" | tr -d '\r\n')
           LOCATION="centralindia"
           STORAGE_ACCOUNT_NAME="tfstate$(date +%s%N | cut -c1-6)"
           CONTAINER_NAME="tfstate"
 
-          az group create --name $RG_NAME --location $LOCATION --output none
+          # 1. Explicitly set the Subscription Context to prevent "SubscriptionNotFound" bugs
+          # We extract the subscriptionId right out of the AZURE_CREDENTIALS secret block
+          export SUB_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .subscriptionId)
+          az account set --subscription $SUB_ID
+
+          # 2. Wait up to 60 seconds if Role Assignment hasn't propagated yet (Azure eventual consistency)
+          for i in {1..4}; do
+            az group create --name $RG_NAME --location $LOCATION --output none && break || echo "Waiting 15s for new Service Principal role propagation..."; sleep 15
+          done
           
           # Check if storage account already exists in this RG
           EXISTING_SA=$(az storage account list -g $RG_NAME --query "[?starts_with(name, 'tfstate')].name" -o tsv | head -n 1)
           
           if [ -z "$EXISTING_SA" ]; then
             echo "Creating new Storage Account: $STORAGE_ACCOUNT_NAME for Terraform State..."
-            az storage account create --resource-group $RG_NAME --name $STORAGE_ACCOUNT_NAME --sku Standard_LRS --encryption-services blob --output none
+            
+            # Use explicit min-tls-version to prevent Azure CLI warnings 
+            az storage account create --resource-group $RG_NAME --name $STORAGE_ACCOUNT_NAME --sku Standard_LRS --encryption-services blob --min-tls-version TLS1_2 --output none
             az storage container create --name $CONTAINER_NAME --account-name $STORAGE_ACCOUNT_NAME --auth-mode login --output none
+            
             echo "TF_STATE_ACCOUNT=$STORAGE_ACCOUNT_NAME" >> $GITHUB_ENV
           else
             echo "Using existing Storage Account: $EXISTING_SA for Terraform State..."

@@ -59,7 +59,10 @@ az acr create --resource-group $RG_NAME \
 Once created, map the following secrets into your GitHub repository settings under **`Settings > Secrets and variables > Actions`**:
 
 *   **`AZURE_CREDENTIALS`**: 
-    To generate this, run `az ad sp create-for-rbac --name "myAppDeployer" --role contributor --scopes /subscriptions/<YOUR_SUBSCRIPTION_ID>/resourceGroups/$RG_NAME --sdk-auth` and copy the JSON output directly into the secret.
+    To generate this, open your terminal and run the included helper script:
+    * **Windows:** `.\scripts\generate_credentials.ps1`
+    * **Mac/Linux:** `bash ./scripts/generate_credentials.sh`
+    The script will automatically authenticate with Azure and output the exact JSON block you need to copy and paste directly into the secret.
 *   **`ACI_RESOURCE_GROUP`**: The exact name you used for `$RG_NAME`.
 *   **`ACR_LOGIN_SERVER`**: The URL of your registry, usually `<your-acr-name>.azurecr.io`
 *   **`ACR_USERNAME`**: The ACR Admin username (found in Azure Portal -> The ACR Resource -> Access Keys).
