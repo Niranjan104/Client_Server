@@ -211,6 +211,7 @@ resource "azurerm_container_group" "monitoring" {
 
   container {
     name   = "prometheus"
+    image  = "prom/prometheus:latest"
     cpu    = "0.5"
     memory = "1"
 
