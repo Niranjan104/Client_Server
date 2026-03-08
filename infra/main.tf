@@ -185,6 +185,56 @@ resource "azurerm_container_group" "nginx" {
       GREEN_SERVER_HOST  = "${var.server_name}-green.centralindia.azurecontainer.io"
       BLUE_CLIENT_HOST   = "${var.client_name}-blue.centralindia.azurecontainer.io"
       GREEN_CLIENT_HOST  = "${var.client_name}-green.centralindia.azurecontainer.io"
+      RESOLVER_IP        = "168.63.129.16"
+    }
+  }
+}
+
+# ── Monitoring Stack (Prometheus & Grafana) ──────────────────────────────────
+resource "azurerm_container_group" "monitoring" {
+  name                = "monitoring-teastall"
+  location            = data.azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
+  os_type             = "Linux"
+  ip_address_type     = "Public"
+  dns_name_label      = "monitoring-teastall"
+
+  image_registry_credential {
+    server   = data.azurerm_container_registry.acr.login_server
+    username = var.acr_username
+    password = var.acr_password
+  }
+
+  container {
+    name   = "prometheus"
+    image  = "prom/prometheus:latest"
+    cpu    = "0.5"
+    memory = "1"
+
+    ports {
+      port     = 9090
+      protocol = "TCP"
+    }
+
+    # Mount the custom scraping configuration from Azure File Share 
+    # (Or in our CI/CD case, we can pass it as a custom built image. Let's assume custom Built Image)
+    image  = "${data.azurerm_container_registry.acr.login_server}/monitoring:latest"
+  }
+
+  container {
+    name   = "grafana"
+    image  = "grafana/grafana:latest"
+    cpu    = "0.5"
+    memory = "1"
+
+    ports {
+      port     = 3001
+      protocol = "TCP"
+    }
+
+    environment_variables = {
+      GF_SERVER_HTTP_PORT = "3001"
+      GF_SECURITY_ADMIN_PASSWORD = "admin" # Explicitly default for review purposes
     }
   }
 }

@@ -1,0 +1,88 @@
+name: Infrastructure Provisioning (Terraform)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+  workflow_dispatch:
+
+jobs:
+  terraform:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    
+    # Needs permissions to use OIDC or handle Azure Login
+    permissions:
+      id-token: write
+      contents: read
+
+    defaults:
+      run:
+        working-directory: ./infra
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Create Terraform State Storage (Bootstrapping)
+        # Terraform needs somewhere to securely save its "state file".
+        # This bash script automatically provisions an Azure Storage Account exclusively for Terraform State
+        # BEFORE Terraform even runs, ensuring a truly hands-off zero-to-hero experience.
+        run: |
+          RG_NAME=$(echo "${{ secrets.ACI_RESOURCE_GROUP }}" | tr -d '\r\n')
+          LOCATION="centralindia"
+          STORAGE_ACCOUNT_NAME="tfstate$(date +%s%N | cut -c1-6)"
+          CONTAINER_NAME="tfstate"
+
+          az group create --name $RG_NAME --location $LOCATION --output none
+          
+          # Check if storage account already exists in this RG
+          EXISTING_SA=$(az storage account list -g $RG_NAME --query "[?starts_with(name, 'tfstate')].name" -o tsv | head -n 1)
+          
+          if [ -z "$EXISTING_SA" ]; then
+            echo "Creating new Storage Account: $STORAGE_ACCOUNT_NAME for Terraform State..."
+            az storage account create --resource-group $RG_NAME --name $STORAGE_ACCOUNT_NAME --sku Standard_LRS --encryption-services blob --output none
+            az storage container create --name $CONTAINER_NAME --account-name $STORAGE_ACCOUNT_NAME --auth-mode login --output none
+            echo "TF_STATE_ACCOUNT=$STORAGE_ACCOUNT_NAME" >> $GITHUB_ENV
+          else
+            echo "Using existing Storage Account: $EXISTING_SA for Terraform State..."
+            echo "TF_STATE_ACCOUNT=$EXISTING_SA" >> $GITHUB_ENV
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.ACI_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ env.TF_STATE_ACCOUNT }}" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=teastall.terraform.tfstate"
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan \
+            -var="resource_group_name=${{ secrets.ACI_RESOURCE_GROUP }}" \
+            -var="acr_name=${{ secrets.ACR_NAME }}" \
+            -var="acr_username=${{ secrets.ACR_USERNAME }}" \
+            -var="acr_password=${{ secrets.ACR_PASSWORD }}" \
+            -var="server_name=${{ secrets.SERVER_BASE_NAME }}" \
+            -var="client_name=${{ secrets.CLIENT_BASE_NAME }}" \
+            -var="tf_state_storage_account=${{ env.TF_STATE_ACCOUNT }}" \
+            -var="active_color=blue" \
+            -var="blue_image_tag=latest" \
+            -var="green_image_tag=latest" \
+            -out=tfplan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan

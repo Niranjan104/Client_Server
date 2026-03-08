@@ -135,6 +135,8 @@ jobs:
             context: ./client
           - image: server
             context: ./server
+          - image: nginx
+            context: ./nginx
 
     steps:
       - uses: actions/checkout@v4

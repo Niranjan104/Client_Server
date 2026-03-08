@@ -151,14 +151,20 @@ jobs:
           sleep 45
 
           INACTIVE_SERVER_URL="http://${SERVER_BASE}-${INACTIVE_COLOR}.centralindia.azurecontainer.io:8080/api/version"
-          echo "Smoke testing: $INACTIVE_SERVER_URL"
+          INACTIVE_CLIENT_URL="http://${CLIENT_BASE}-${INACTIVE_COLOR}.centralindia.azurecontainer.io:3000"
 
-          # Retry smoke test up to 5 times with 15s between attempts
+          echo "Smoke testing backend: $INACTIVE_SERVER_URL"
+          echo "Smoke testing frontend: $INACTIVE_CLIENT_URL"
+
+          # Retry smoke test up to 5 times for BOTH containers
           SMOKE_PASSED=false
           for i in 1 2 3 4 5; do
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$INACTIVE_SERVER_URL" --max-time 10 || echo "000")
-            echo "  Attempt $i: HTTP $HTTP_STATUS"
-            if [ "$HTTP_STATUS" = "200" ]; then
+            SERVER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$INACTIVE_SERVER_URL" --max-time 10 || echo "000")
+            CLIENT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$INACTIVE_CLIENT_URL" --max-time 10 || echo "000")
+            
+            echo "  Attempt $i: Backend HTTP $SERVER_STATUS | Frontend HTTP $CLIENT_STATUS"
+            
+            if [ "$SERVER_STATUS" = "200" ] && [ "$CLIENT_STATUS" = "200" ]; then
               SMOKE_PASSED=true
               break
             fi
@@ -167,20 +173,21 @@ jobs:
 
           # ── Step 5: Result — either flip traffic or rollback ───────────────
           if [ "$SMOKE_PASSED" != "true" ]; then
-            echo "::error::Smoke test FAILED on ${INACTIVE_COLOR} slot. Active slot (${ACTIVE_COLOR}) unchanged."
-            echo "Rollback: no action needed — ${ACTIVE_COLOR} is still live."
+            echo "::error::Smoke test FAILED on ${INACTIVE_COLOR} slot."
+            echo "Rollback initiated: Tearing down broken ${INACTIVE_COLOR} containers..."
+            
+            az container delete --name "${SERVER_BASE}-${INACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || true
+            az container delete --name "${CLIENT_BASE}-${INACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || true
+            
+            echo "Rollback complete. Active slot (${ACTIVE_COLOR}) unchanged and remains live."
             exit 1
           fi
 
-          echo "Smoke test PASSED. Flipping NGINX from ${ACTIVE_COLOR} → ${INACTIVE_COLOR} ..."
+          echo "Smoke tests PASSED. Flipping NGINX from ${ACTIVE_COLOR} → ${INACTIVE_COLOR} ..."
 
-          # ── Step 6: Recreate NGINX pointing to the new active slot ─────────
-          # NGINX downtime is typically 3-5 seconds while the new container starts.
-          az container delete \
-            --name "$NGINX_LABEL" \
-            --resource-group "$RG" \
-            --yes 2>/dev/null || true
-
+          # ── Step 6: Update NGINX to point to the new active slot ───────
+          # Instead of destroying and recreating the gateway (which causes 5-10s hard downtime),
+          # we execute an in-place update which allows Azure to gracefully restart the container
           az container create \
             --name "$NGINX_LABEL" \
             --resource-group "$RG" \
@@ -201,8 +208,17 @@ jobs:
                 RESOLVER_IP="168.63.129.16" \
             --cpu 0.25 --memory 0.5
 
+          # ── Step 7: Teardown the old environment (Cost Savings) ───────────
+          if [ "$ACTIVE_COLOR" != "blue" ] && [ "$ACTIVE_COLOR" != "green" ]; then
+            echo "Initial deployment detected. No old containers to teardown."
+          else
+            echo "Traffic successfully routed to ${INACTIVE_COLOR}."
+            echo "Tearing down old ${ACTIVE_COLOR} slot to save Azure billing costs..."
+            az container delete --name "${SERVER_BASE}-${ACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || echo "Server delete skipped/failed"
+            az container delete --name "${CLIENT_BASE}-${ACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || echo "Client delete skipped/failed"
+          fi
+
           echo ""
           echo "✅ Deployment complete!"
           echo "   Active slot : $INACTIVE_COLOR"
           echo "   Public URL  : http://$NGINX_LABEL.centralindia.azurecontainer.io"
-          echo "   Admin Portal: http://$NGINX_LABEL.centralindia.azurecontainer.io/admin"
