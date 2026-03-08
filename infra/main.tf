@@ -21,15 +21,14 @@ provider "azurerm" {
 }
 
 # ── Backbone Infrastructure (Resource Group & ACR) ──────────────────────────
-resource "azurerm_resource_group" "rg" {
-  name     = var.resource_group_name
-  location = "centralindia"
+data "azurerm_resource_group" "rg" {
+  name = var.resource_group_name
 }
 
 resource "azurerm_container_registry" "acr" {
   name                = var.acr_name
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
+  location            = data.azurerm_resource_group.rg.location
   sku                 = "Basic"
   admin_enabled       = true
 }
@@ -37,8 +36,8 @@ resource "azurerm_container_registry" "acr" {
 # ── Blue Server ACI ──────────────────────────────────────────────────────────
 resource "azurerm_container_group" "server_blue" {
   name                = "${var.server_name}-blue"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
+  location            = data.azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
   os_type             = "Linux"
   ip_address_type     = "Public"
   dns_name_label      = "${var.server_name}-blue"
@@ -70,8 +69,8 @@ resource "azurerm_container_group" "server_blue" {
 # ── Green Server ACI ─────────────────────────────────────────────────────────
 resource "azurerm_container_group" "server_green" {
   name                = "${var.server_name}-green"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
+  location            = data.azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
   os_type             = "Linux"
   ip_address_type     = "Public"
   dns_name_label      = "${var.server_name}-green"
@@ -103,8 +102,8 @@ resource "azurerm_container_group" "server_green" {
 # ── Blue Client ACI ──────────────────────────────────────────────────────────
 resource "azurerm_container_group" "client_blue" {
   name                = "${var.client_name}-blue"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
+  location            = data.azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
   os_type             = "Linux"
   ip_address_type     = "Public"
   dns_name_label      = "${var.client_name}-blue"
@@ -131,8 +130,8 @@ resource "azurerm_container_group" "client_blue" {
 # ── Green Client ACI ─────────────────────────────────────────────────────────
 resource "azurerm_container_group" "client_green" {
   name                = "${var.client_name}-green"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
+  location            = data.azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
   os_type             = "Linux"
   ip_address_type     = "Public"
   dns_name_label      = "${var.client_name}-green"
@@ -159,8 +158,8 @@ resource "azurerm_container_group" "client_green" {
 # ── NGINX Router ACI (single public entry point) ─────────────────────────────
 resource "azurerm_container_group" "nginx" {
   name                = "nginx-teastall"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
+  location            = data.azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
   os_type             = "Linux"
   ip_address_type     = "Public"
   dns_name_label      = "nginx-teastall"
@@ -197,8 +196,8 @@ resource "azurerm_container_group" "nginx" {
 # ── Monitoring Stack (Prometheus & Grafana) ──────────────────────────────────
 resource "azurerm_container_group" "monitoring" {
   name                = "monitoring-teastall"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
+  location            = data.azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
   os_type             = "Linux"
   ip_address_type     = "Public"
   dns_name_label      = "monitoring-teastall"
