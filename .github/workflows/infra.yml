@@ -1,17 +1,19 @@
 name: Infrastructure Provisioning (Terraform)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'infra/**'
-      - '.github/workflows/infra.yml'
+  workflow_run:
+    workflows: ["Full Stack CI"]
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   terraform:
     name: Terraform Apply
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     
     # Needs permissions to use OIDC or handle Azure Login
     permissions:
@@ -90,6 +92,10 @@ jobs:
       - name: Terraform Init
         run: |
           RG_NAME=$(echo '${{ secrets.ACI_RESOURCE_GROUP }}' | tr -d '\r\n')
+          
+          # Force break any stuck Terraform state lease from previously cancelled runs!
+          echo "Force unlocking Terraform state blob from dead runs..."
+          az storage blob lease break --blob-name teastall.terraform.tfstate --container-name tfstate --account-name ${{ env.TF_STATE_ACCOUNT }} --auth-mode login || true
           
           terraform init \
             -backend-config="resource_group_name=$RG_NAME" \
