@@ -3,14 +3,18 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: "server_blue"
+  # Scrape Prometheus itself so you can test prometheus_http_requests_total
+  - job_name: "prometheus"
     static_configs:
-      - targets: ["server_blue:8080"]
+      - targets: ["localhost:9090"]
 
-  - job_name: "server_green"
+  # Scrape cAdvisor for CPU, RAM, and Network metrics of all containers
+  - job_name: "cadvisor"
+    metrics_path: "/metrics"
     static_configs:
-      - targets: ["server_green:8080"]
+      - targets: ["cadvisor:8080"]
 
+  # NGINX Proxy via Exporter
   - job_name: "nginx"
     static_configs:
-      - targets: ["nginx_router:80"]
+      - targets: ["nginx_exporter:9113"]

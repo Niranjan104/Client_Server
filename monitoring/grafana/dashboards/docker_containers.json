@@ -1,0 +1,97 @@
+{
+    "annotations": {
+        "list": []
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "id": null,
+    "links": [],
+    "liveNow": false,
+    "panels": [
+        {
+            "title": "CPU Usage (per container)",
+            "type": "timeseries",
+            "datasource": "Prometheus",
+            "targets": [
+                {
+                    "expr": "rate(container_cpu_usage_seconds_total{name=~\"^[a-zA-Z0-9].+\"}[1m])",
+                    "legendFormat": "{{name}}"
+                }
+            ],
+            "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "title": "RAM Usage (per container)",
+            "type": "timeseries",
+            "datasource": "Prometheus",
+            "targets": [
+                {
+                    "expr": "container_memory_usage_bytes",
+                    "legendFormat": "{{id}}"
+                }
+            ],
+            "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 12,
+                "y": 0
+            }
+        },
+        {
+            "title": "Network Traffic Received",
+            "type": "timeseries",
+            "datasource": "Prometheus",
+            "targets": [
+                {
+                    "expr": "rate(container_network_receive_bytes_total[1m])",
+                    "legendFormat": "{{id}}"
+                }
+            ],
+            "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 0,
+                "y": 9
+            }
+        },
+        {
+            "title": "Prometheus HTTP Requests",
+            "type": "timeseries",
+            "datasource": "Prometheus",
+            "targets": [
+                {
+                    "expr": "rate(prometheus_http_requests_total[1m])",
+                    "legendFormat": "{{handler}}"
+                }
+            ],
+            "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 12,
+                "y": 9
+            }
+        }
+    ],
+    "refresh": "5s",
+    "schemaVersion": 36,
+    "style": "dark",
+    "tags": [],
+    "templating": {
+        "list": []
+    },
+    "time": {
+        "from": "now-15m",
+        "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "Docker System Metrics",
+    "uid": "docker-metrics-db",
+    "version": 1
+}

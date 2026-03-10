@@ -15,6 +15,9 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
+      - name: Record Deployment Start Time
+        run: echo "DEPLOY_START_TIME=$(date +%s)" >> $GITHUB_ENV
+
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -95,6 +98,7 @@ jobs:
           docker push ${{ steps.acr.outputs.login_server }}/nginx:latest
 
       - name: Deploy to Inactive Slot and Flip Traffic
+        id: deploy
         run: |
           RG=$(echo "${{ secrets.ACI_RESOURCE_GROUP }}" | tr -d '\r\n')
           LOGIN_SERVER=$(echo "${{ steps.acr.outputs.login_server }}" | tr -d '\r\n')
@@ -232,7 +236,42 @@ jobs:
             az container delete --name "${CLIENT_BASE}-${ACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || echo "Client delete skipped/failed"
           fi
 
+          echo "active_slot=$INACTIVE_COLOR" >> $GITHUB_OUTPUT
+          echo "public_url=http://$NGINX_LABEL.centralindia.azurecontainer.io" >> $GITHUB_OUTPUT
+
           echo ""
           echo "Deployment complete."
           echo "  Active slot : $INACTIVE_COLOR"
           echo "  Public URL  : http://$NGINX_LABEL.centralindia.azurecontainer.io"
+
+      - name: Deployment Success Notification
+        if: success()
+        run: |
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - DEPLOY_START_TIME))
+          WEBHOOK_URL="${{ secrets.WEBHOOK_URL }}"
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "WEBHOOK_URL secret not set. Skipping notification."
+            exit 0
+          fi
+          
+          MESSAGE="✅ **Deployment Successful**\n\n**Commit:** \`${{ github.sha }}\`\n**Duration:** \`${DURATION} seconds\`\n**Active Slot:** \`${{ steps.deploy.outputs.active_slot }}\`\n**URL:** ${{ steps.deploy.outputs.public_url }}"
+          
+          curl -H "Content-Type: application/json" \
+               -d "{\"content\": \"$MESSAGE\", \"text\": \"$MESSAGE\"}" \
+               $WEBHOOK_URL
+
+      - name: Deployment Failure Notification
+        if: failure()
+        run: |
+          WEBHOOK_URL="${{ secrets.WEBHOOK_URL }}"
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "WEBHOOK_URL secret not set. Skipping notification."
+            exit 0
+          fi
+          
+          MESSAGE="❌ **Deployment Failed**\n\n**Commit:** \`${{ github.sha }}\`\n**Job:** \`${{ github.job }}\`\nPlease check the [GitHub Actions Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+          
+          curl -H "Content-Type: application/json" \
+               -d "{\"content\": \"$MESSAGE\", \"text\": \"$MESSAGE\"}" \
+               $WEBHOOK_URL

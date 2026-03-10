@@ -29,6 +29,6 @@ RUN chown -R appuser:appgroup /app
 
 USER appuser
 
-EXPOSE 5000
+EXPOSE 8080
 
 CMD ["node", "server.js"]
