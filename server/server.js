@@ -1,11 +1,47 @@
+const { randomUUID } = require("node:crypto");
 const express = require("express");
 const cors = require("cors");
 
+const {
+  register,
+  setApplicationInfo,
+  setUnpaidOrders,
+  startHttpRequestTimer,
+  recordOrderCreated,
+  recordPaymentCheck,
+  recordPaymentApproval,
+  recordOrderValidationFailure
+} = require("./metrics");
+
 const app = express();
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
 app.use(cors());
-app.use(express.json()); // allows us to parse incoming JSON bodies for orders
+app.use(express.json({ limit: "1mb" }));
+
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  next();
+});
 
 const VERSION = process.env.APP_VERSION || "dev";
+const MAX_ORDER_LOGS = parseInteger(process.env.MAX_ORDER_LOGS, 500, 1);
+const ORDER_RESPONSE_DELAY_MS = parseInteger(
+  process.env.ORDER_RESPONSE_DELAY_MS,
+  process.env.NODE_ENV === "test" ? 0 : 500,
+  0
+);
+
+setApplicationInfo(VERSION);
+setUnpaidOrders(VERSION, 0);
+
+app.use((req, res, next) => {
+  const stopTimer = startHttpRequestTimer(req, VERSION);
+  res.on("finish", () => stopTimer(res));
+  next();
+});
 
 // Tea Stall Menu Database (Mock)
 const menuItems = [
@@ -14,20 +50,35 @@ const menuItems = [
   { id: 3, name: "Cardamom Tea (Elaichi)", price: 15, description: "Refreshing cardamom flavored tea", inStock: true },
   { id: 4, name: "Lemon Iced Tea", price: 30, description: "Chilled tea with fresh lemon slices", inStock: true },
   { id: 5, name: "Black Coffee", price: 25, description: "Strong roasted dark coffee", inStock: false },
-  { id: 6, name: "Samosa (2 pcs)", price: 30, description: "Crispy potato-filled pastry snack", inStock: true },
+  { id: 6, name: "Samosa (2 pcs)", price: 30, description: "Crispy potato-filled pastry snack", inStock: true }
 ];
 
-let orderLogs = []; // In-memory database for orders
+let orderLogs = [];
 
 console.log("Tea Stall Server Started - Serving Version: " + VERSION);
+
+app.locals.resetState = () => {
+  orderLogs = [];
+  syncUnpaidOrderMetric();
+};
+app.locals.metricsRegistry = register;
 
 // Basic root route so the health probe/users don't see "Cannot GET /"
 app.get("/", (req, res) => {
   res.send(`<h1>Niranjan's Tea Stall API</h1><p>Backend is running. Version: ${VERSION}</p>`);
 });
 
+app.get("/metrics", async (req, res, next) => {
+  try {
+    res.set("Content-Type", register.contentType);
+    res.end(await register.metrics());
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ==========================================
-// API ROUTES 
+// API ROUTES
 // ==========================================
 
 const apiRouter = express.Router();
@@ -36,70 +87,61 @@ apiRouter.get("/health", (req, res) => {
   res.status(200).json({ status: "OK", version: VERSION });
 });
 
-// Endpoint to prove Blue/Green deployment
 apiRouter.get("/version", (req, res) => {
   res.json({ version: VERSION });
 });
 
-// Endpoint to fetch the Menu
 apiRouter.get("/menu", (req, res) => {
   res.json(menuItems);
 });
 
-// Endpoint to submit a Cart (creates unpaid order)
 apiRouter.post("/order", (req, res) => {
   const { cart, customerName } = req.body;
 
-  if (!cart || !Array.isArray(cart) || cart.length === 0) {
+  if (!Array.isArray(cart) || cart.length === 0) {
+    recordOrderValidationFailure(VERSION);
     return res.status(400).json({ error: "Cart cannot be empty" });
   }
 
-  let totalAmount = 0;
-  const orderItems = [];
-
-  for (const cartItem of cart) {
-    const item = menuItems.find(m => m.id === cartItem.itemId);
-    if (!item) continue;
-
-    const qty = parseInt(cartItem.quantity, 10);
-    totalAmount += item.price * qty;
-
-    orderItems.push({
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      quantity: qty,
-      subtotal: item.price * qty
-    });
+  const parsedOrder = parseCart(cart);
+  if (parsedOrder.error) {
+    recordOrderValidationFailure(VERSION);
+    return res.status(400).json({ error: parsedOrder.error });
   }
 
-  const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-
   const newOrder = {
-    orderId,
-    customerName: customerName || "Guest",
-    items: orderItems,
-    totalAmount,
+    orderId: `ORD-${randomUUID().split("-")[0].toUpperCase()}`,
+    customerName: normalizeCustomerName(customerName),
+    items: parsedOrder.items,
+    totalAmount: parsedOrder.totalAmount,
     status: "Unpaid",
+    version: VERSION,
     timestamp: new Date().toISOString()
   };
 
   orderLogs.push(newOrder);
+  trimOrderLogs();
+  recordOrderCreated(VERSION, newOrder.items.length, newOrder.totalAmount);
+  syncUnpaidOrderMetric();
 
-  // Simulate slight network delay
   setTimeout(() => {
     res.status(201).json({
       message: "Please complete payment to finalize your order.",
       orderId: newOrder.orderId,
       totalAmount: newOrder.totalAmount
     });
-  }, 500);
+  }, ORDER_RESPONSE_DELAY_MS);
 });
 
-// Endpoint for client to poll payment status
 apiRouter.post("/check-payment", (req, res) => {
   const { orderId } = req.body;
-  const orderIndex = orderLogs.findIndex(o => o.orderId === orderId);
+
+  if (!isValidOrderId(orderId)) {
+    return res.status(400).json({ error: "A valid orderId is required" });
+  }
+
+  recordPaymentCheck(VERSION);
+  const orderIndex = orderLogs.findIndex((order) => order.orderId === orderId);
 
   if (orderIndex === -1) {
     return res.status(404).json({ error: "Order not found" });
@@ -108,41 +150,164 @@ apiRouter.post("/check-payment", (req, res) => {
   const order = orderLogs[orderIndex];
   if (order.status === "Paid") {
     return res.status(200).json({ status: "Paid", bill: order });
-  } else {
-    return res.status(200).json({ status: "Unpaid" });
   }
+
+  return res.status(200).json({ status: "Unpaid" });
 });
 
-// Endpoint for Admin to manually approve a payment
 apiRouter.post("/admin/approve-payment", (req, res) => {
   const { orderId } = req.body;
-  const orderIndex = orderLogs.findIndex(o => o.orderId === orderId);
 
+  if (!isValidOrderId(orderId)) {
+    return res.status(400).json({ error: "A valid orderId is required" });
+  }
+
+  const orderIndex = orderLogs.findIndex((order) => order.orderId === orderId);
   if (orderIndex === -1) {
     return res.status(404).json({ error: "Order not found" });
+  }
+
+  if (orderLogs[orderIndex].status === "Paid") {
+    return res.status(200).json({ success: true, message: `Payment already approved for ${orderId}` });
   }
 
   orderLogs[orderIndex].status = "Paid";
   orderLogs[orderIndex].paidAt = new Date().toISOString();
 
-  res.status(200).json({ success: true, message: `Payment approved for ${orderId}` });
+  recordPaymentApproval(VERSION);
+  syncUnpaidOrderMetric();
+
+  return res.status(200).json({ success: true, message: `Payment approved for ${orderId}` });
 });
 
-// Endpoint to view all stored orders in the backend memory
 apiRouter.get("/orders", (req, res) => {
-  // Sort by newest first
   const sortedLogs = [...orderLogs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   res.json(sortedLogs);
 });
 
-// Register the API Router
+apiRouter.use((req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
 app.use("/api", apiRouter);
+
+app.use((err, req, res, next) => {
+  void req;
+  void next;
+
+  const statusCode = Number.isInteger(err?.status) ? err.status : (
+    err?.type === "entity.parse.failed" ? 400 : 500
+  );
+
+  if (statusCode >= 500) {
+    console.error("Unhandled server error", err);
+  }
+
+  res.status(statusCode).json({
+    error: statusCode === 400 ? "Invalid JSON payload." : "Internal server error."
+  });
+});
 
 if (require.main === module) {
   const PORT = process.env.PORT || 8080;
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT} (Version: ${VERSION})`);
   });
+
+  const shutdown = (signal) => {
+    console.log(`Received ${signal}. Shutting down HTTP server...`);
+
+    const forceExitTimer = setTimeout(() => {
+      console.error("Forced shutdown after timeout.");
+      process.exit(1);
+    }, 10000);
+
+    forceExitTimer.unref();
+
+    server.close((error) => {
+      clearTimeout(forceExitTimer);
+
+      if (error) {
+        console.error("Error while shutting down server", error);
+        process.exit(1);
+      }
+
+      console.log("HTTP server stopped cleanly.");
+      process.exit(0);
+    });
+  };
+
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
 module.exports = app;
+
+function parseInteger(value, fallback, minimum) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed >= minimum ? parsed : fallback;
+}
+
+function normalizeCustomerName(customerName) {
+  if (typeof customerName !== "string") {
+    return "Guest";
+  }
+
+  const normalizedName = customerName.trim();
+  return normalizedName.length > 0 ? normalizedName.slice(0, 64) : "Guest";
+}
+
+function parseCart(cart) {
+  const items = [];
+  let totalAmount = 0;
+
+  for (const cartItem of cart) {
+    const itemId = Number.parseInt(String(cartItem?.itemId), 10);
+    const quantity = Number.parseInt(String(cartItem?.quantity), 10);
+
+    if (!Number.isInteger(itemId) || !Number.isInteger(quantity) || quantity <= 0) {
+      return { error: "Each cart item must include a valid itemId and a positive quantity." };
+    }
+
+    const item = menuItems.find((menuItem) => menuItem.id === itemId);
+    if (!item) {
+      return { error: `Menu item ${itemId} does not exist.` };
+    }
+
+    if (!item.inStock) {
+      return { error: `${item.name} is currently out of stock.` };
+    }
+
+    const subtotal = item.price * quantity;
+    totalAmount += subtotal;
+
+    items.push({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      quantity,
+      subtotal
+    });
+  }
+
+  if (items.length === 0) {
+    return { error: "Cart contains no valid items." };
+  }
+
+  return { items, totalAmount };
+}
+
+function isValidOrderId(orderId) {
+  return typeof orderId === "string" && orderId.trim().length > 0;
+}
+
+function trimOrderLogs() {
+  if (orderLogs.length > MAX_ORDER_LOGS) {
+    orderLogs = orderLogs.slice(-MAX_ORDER_LOGS);
+  }
+}
+
+function syncUnpaidOrderMetric() {
+  const unpaidOrderCount = orderLogs.filter((order) => order.status !== "Paid").length;
+  setUnpaidOrders(VERSION, unpaidOrderCount);
+}

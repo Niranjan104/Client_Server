@@ -320,7 +320,8 @@ jobs:
           echo "  Complexity (xn): $XN"
           echo "  Failure Probability (P): $PROBABILITY"
           
-          PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/github_actions"
+          LEGACY_PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/github_actions"
+          PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/github_actions/run_id/${{ github.run_id }}"
           
           # Retry push up to 5 times (pushgateway might just be booting up)
           METRICS_PAYLOAD=$(cat <<EOF
@@ -335,6 +336,7 @@ jobs:
           )
           
           echo "$METRICS_PAYLOAD" > metrics.txt
+          curl -s -X DELETE "$LEGACY_PUSHGATEWAY_URL" >/dev/null || true
           
           for i in 1 2 3 4 5; do
             echo "Attempt $i to push metrics..."

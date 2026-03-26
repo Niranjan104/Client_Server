@@ -1,67 +1,78 @@
-# System Monitoring & Alerting Guide
+# Monitoring Guide
 
-This project includes a fully free, robust observability setup spanning container metrics and CI/CD deployment alerts.
+This repository now exposes application, reverse-proxy, container, and deployment metrics through a clear split:
 
-## 1. CI/CD Deployment Alerts (Free Tool Setup)
+- Local Docker monitoring: Prometheus + Grafana + cAdvisor + NGINX exporter
+- Cloud monitoring: Azure Monitor dashboard for ACI infrastructure metrics
+- Deployment analytics: Pushgateway-backed DORA-style dashboard in Grafana
 
-We use powerful webhook integrations directly embedded in our GitHub Actions (`.github/workflows/cd.yml`) to send instant feedback to your team on every deployment or failure without needing third-party SaaS logging suites.
+## Local Monitoring
 
-### What Metrics Are Tracked?
-- **Build Status**: Are the Docker images building correctly?
-- **Smoke Tests**: Is the backend (`/api/version`) and frontend reachable 45s post-deployment?
-- **Deployment Duration**: How long the overall CI/CD process took.
-- **Active Slot**: Which slot (blue/green) is currently handling live traffic.
-- **Commit Details & Live URL**: Tracing exact revisions in production.
-- **Failure Logs**: Direct links to GitHub actions logs when step failures occur.
-
-### Setting Up Discord Alerts (Recommended Free Approach)
-Discord webhooks are completely free, reliable, and parse JSON webhooks easily.
-
-1. Create a private Discord server or channel for monitoring.
-2. In your Discord channel settings: **Integrations** -> **Webhooks** -> **New Webhook**.
-3. Name it `DeployBot` and copy the **Webhook URL**.
-4. Navigate to your GitHub Repository -> **Settings** -> **Secrets and variables** -> **Actions** -> **New repository secret**.
-5. Create a secret named `WEBHOOK_URL` and paste the URL.
-6. Trigger a deployment. The pipeline will automatically send Success or Failure metrics directly to the chat!
-
-*Note: The system also sends a `text` payload so this works natively with Slack Incoming Webhooks as well.*
-
-## 2. Infrastructure Metrics (Prometheus + Grafana locally)
-
-For analyzing the local docker containers and overall server health without paying for expensive tools like Datadog, we utilize **Prometheus** and **Grafana** via docker-compose profiles. 
-
-### How to use:
-Start your environment with the monitoring profile:
+Start the full stack with monitoring enabled:
 
 ```bash
-docker-compose --profile monitoring up -d
+docker compose --profile monitoring up --build -d
 ```
 
-### Accessing the services
-- **Prometheus** (Metrics Collector): `http://localhost:9090`
-- **Grafana** (Visual Dashboards): `http://localhost:3001`
-  - Default Login: Username: `admin`, Password: `admin` (or configured via variables).
+Available services:
 
-### Viewing Dashboards
-Grafana is now **pre-configured** with the Prometheus Data Source and an out-of-the-box Dashboard for your Docker system!
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3001`
+- Pushgateway: `http://localhost:9091`
 
-**How to see your metrics:**
-1. Open **Grafana** (`http://localhost:3001`).
-2. Log in using `admin` / `admin`.
-3. In the left menu, go to **Dashboards**.
-4. Click on **Docker System Metrics**.
-5. You will instantly see live graphs for your CPU, RAM, Network Traffic, and Prometheus HTTP Requests!
+Default Grafana login:
 
-## 3. Cloud Metrics (Azure Monitor + Grafana)
+- Username: `admin`
+- Password: `admin`
 
-When the application is deployed to Azure Container Instances (ACI), local tools like `cAdvisor` cannot be used since ACI is a serverless environment that prohibits privileged host access.
+Pre-provisioned dashboards:
 
-Instead, the cloud deployment natively utilizes **Azure Monitor** to track CPU, Memory, and Network traffic for all your containers for free!
+- `Docker System Metrics (Local Compose)`
+- `Application Observability (Local Compose)`
+- `Quantitative Performance Analysis (DORA)`
 
-**How the Cloud Grafana Works:**
-When Terraform provisions the `monitoring-teastall` Container Group:
-1. It assigns a **System Assigned Managed Identity** to the Grafana container.
-2. It grants this identity the **Monitoring Reader** role.
-3. It mounts a pre-configured `Azure Monitor` data source and an `Azure ACI Metrics` dashboard directly into the Grafana container using secure ACI Secret Volumes.
+What is scraped locally:
 
-This means you can log into `http://monitoring-teastall.centralindia.azurecontainer.io:3001`, navigate to Dashboards -> **Azure ACI Metrics**, and immediately view your live cloud performance data with absolutely zero manual authentication or secret management required!
+- `prometheus` for collector health
+- `pushgateway` for deployment analytics
+- `cadvisor` for container CPU, memory, and network metrics
+- `nginx_exporter` for reverse-proxy metrics
+- `server_blue` and `server_green` for backend application metrics exposed at `/metrics`
+
+## Backend Metrics
+
+The Node API now exposes Prometheus metrics at:
+
+- `http://server_blue:8080/metrics`
+- `http://server_green:8080/metrics`
+
+Key application metrics include:
+
+- `tea_http_requests_total`
+- `tea_http_request_duration_seconds`
+- `tea_http_errors_total`
+- `tea_orders_created_total`
+- `tea_order_value_rupees_total`
+- `tea_payment_checks_total`
+- `tea_payments_approved_total`
+- `tea_unpaid_orders`
+
+## DORA Metrics
+
+The deployment workflow pushes one metric group per GitHub Actions run into Pushgateway using the `run_id` grouping key. This fixes the previous overwrite behavior and allows Grafana to query deployment history instead of only the latest sample.
+
+If you want to see fresh DORA data after these changes, trigger a new deployment run so Grafana has at least one run-scoped metric set to read.
+
+## Azure Monitoring
+
+For Azure Container Instances, Grafana is provisioned with:
+
+- `Azure ACI Metrics` for CPU, memory, and network usage via Azure Monitor
+- `Quantitative Performance Analysis (DORA)` for deployment analytics via Prometheus + Pushgateway
+
+The cloud Prometheus configuration intentionally scrapes only:
+
+- `localhost:9090` for Prometheus
+- `localhost:9091` for Pushgateway
+
+This avoids false-down scrape targets in ACI, where local Docker-only exporters such as `cadvisor` and `nginx_exporter` do not exist.

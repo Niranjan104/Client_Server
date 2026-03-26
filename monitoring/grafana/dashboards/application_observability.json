@@ -10,81 +10,81 @@
   "liveNow": false,
   "panels": [
     {
-      "title": "CPU Usage (per container)",
+      "title": "Backend Availability",
       "type": "timeseries",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[1m]))",
-          "legendFormat": "{{name}}"
-        }
-      ],
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 0
-      }
-    },
-    {
-      "title": "RAM Working Set (per container)",
-      "type": "timeseries",
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "sum by (name) (container_memory_working_set_bytes{name!=\"\"})",
-          "legendFormat": "{{name}}"
-        }
-      ],
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      }
-    },
-    {
-      "title": "Network Traffic Received",
-      "type": "timeseries",
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "sum by (name) (rate(container_network_receive_bytes_total{name!=\"\"}[1m]))",
-          "legendFormat": "{{name}}"
-        }
-      ],
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      }
-    },
-    {
-      "title": "Prometheus HTTP Requests",
-      "type": "timeseries",
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "sum by (handler) (rate(prometheus_http_requests_total[1m]))",
-          "legendFormat": "{{handler}}"
-        }
-      ],
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      }
-    },
-    {
-      "title": "NGINX Active Connections",
-      "type": "timeseries",
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "nginx_connections_active",
+          "expr": "up{job=\"tea_server\"}",
           "legendFormat": "{{instance}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "title": "Request Rate by Route",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (route, app_version) (rate(tea_http_requests_total{route!=\"/metrics\"}[5m]))",
+          "legendFormat": "{{app_version}} {{route}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      }
+    },
+    {
+      "title": "P95 Request Latency",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(tea_http_request_duration_seconds_bucket{route!=\"/metrics\"}[5m])))",
+          "legendFormat": "{{route}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "title": "Orders Created",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (app_version) (rate(tea_orders_created_total[5m]))",
+          "legendFormat": "{{app_version}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      }
+    },
+    {
+      "title": "Open Unpaid Orders",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (app_version) (tea_unpaid_orders)",
+          "legendFormat": "{{app_version}}"
         }
       ],
       "gridPos": {
@@ -95,13 +95,13 @@
       }
     },
     {
-      "title": "NGINX Request Rate",
+      "title": "Revenue Generated Over Range",
       "type": "timeseries",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(nginx_http_requests_total[1m])",
-          "legendFormat": "{{instance}}"
+          "expr": "sum by (app_version) (increase(tea_order_value_rupees_total[$__range]))",
+          "legendFormat": "{{app_version}}"
         }
       ],
       "gridPos": {
@@ -125,7 +125,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Docker System Metrics (Local Compose)",
-  "uid": "docker-metrics-db",
-  "version": 2
+  "title": "Application Observability (Local Compose)",
+  "uid": "tea-app-observability-db",
+  "version": 1
 }

@@ -234,7 +234,7 @@ resource "azurerm_container_group" "monitoring" {
       name       = "promconfig"
       mount_path = "/etc/prometheus"
       secret = {
-        "prometheus.yml" = base64encode(file("${path.module}/../monitoring/prometheus.yml"))
+        "prometheus.yml" = base64encode(templatefile("${path.module}/../monitoring/prometheus.azure.yml.tftpl", {}))
       }
     }
   }
@@ -296,7 +296,6 @@ resource "azurerm_container_group" "monitoring" {
       name       = "grafana-dashboard-jsons"
       mount_path = "/var/lib/grafana/dashboards"
       secret = {
-        "docker_containers.json" = base64encode(file("${path.module}/../monitoring/grafana/dashboards/docker_containers.json"))
         "azure_aci.json"         = base64encode(templatefile("${path.module}/../monitoring/grafana/dashboards/azure_aci.json", {
           rg_name     = data.azurerm_resource_group.rg.name
           server_base = var.server_name
