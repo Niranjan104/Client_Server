@@ -263,8 +263,9 @@ resource "azurerm_container_group" "monitoring" {
     }
 
     environment_variables = {
-      GF_SERVER_HTTP_PORT = "3001"
+      GF_SERVER_HTTP_PORT        = "3001"
       GF_SECURITY_ADMIN_PASSWORD = "admin" # Explicitly default for review purposes
+      PROMETHEUS_URL             = "http://localhost:9090"
     }
 
     secure_environment_variables = {
