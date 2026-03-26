@@ -20,7 +20,7 @@
             "metricName": "CPUUsage",
             "metricNamespace": "Microsoft.ContainerInstance/containerGroups",
             "timeGrain": "auto",
-            "resources": [ {"resourceGroup": "$resourceGroup", "resourceName": "$containerGroup"} ]
+            "resources": [ {"resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue"}, {"resourceGroup": "${rg_name}", "resourceName": "${server_base}-green"}, {"resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue"}, {"resourceGroup": "${rg_name}", "resourceName": "${client_base}-green"}, {"resourceGroup": "${rg_name}", "resourceName": "${nginx_base}"} ]
           },
           "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
           "refId": "A"
@@ -42,7 +42,7 @@
             "metricName": "MemoryUsage",
             "metricNamespace": "Microsoft.ContainerInstance/containerGroups",
             "timeGrain": "auto",
-            "resources": [ {"resourceGroup": "$resourceGroup", "resourceName": "$containerGroup"} ]
+            "resources": [ {"resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue"}, {"resourceGroup": "${rg_name}", "resourceName": "${server_base}-green"}, {"resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue"}, {"resourceGroup": "${rg_name}", "resourceName": "${client_base}-green"}, {"resourceGroup": "${rg_name}", "resourceName": "${nginx_base}"} ]
           },
           "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
           "refId": "A"
@@ -64,7 +64,7 @@
             "metricName": "NetworkBytesReceivedRate",
             "metricNamespace": "Microsoft.ContainerInstance/containerGroups",
             "timeGrain": "auto",
-            "resources": [ {"resourceGroup": "$resourceGroup", "resourceName": "$containerGroup"} ]
+            "resources": [ {"resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue"}, {"resourceGroup": "${rg_name}", "resourceName": "${server_base}-green"}, {"resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue"}, {"resourceGroup": "${rg_name}", "resourceName": "${client_base}-green"}, {"resourceGroup": "${rg_name}", "resourceName": "${nginx_base}"} ]
           },
           "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
           "refId": "A"
@@ -86,7 +86,7 @@
             "metricName": "NetworkBytesTransmittedRate",
             "metricNamespace": "Microsoft.ContainerInstance/containerGroups",
             "timeGrain": "auto",
-            "resources": [ {"resourceGroup": "$resourceGroup", "resourceName": "$containerGroup"} ]
+            "resources": [ {"resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue"}, {"resourceGroup": "${rg_name}", "resourceName": "${server_base}-green"}, {"resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue"}, {"resourceGroup": "${rg_name}", "resourceName": "${client_base}-green"}, {"resourceGroup": "${rg_name}", "resourceName": "${nginx_base}"} ]
           },
           "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
           "refId": "A"
@@ -101,36 +101,7 @@
   "style": "dark",
   "tags": [],
   "templating": {
-    "list": [
-      {
-        "current": { "selected": false, "text": "Niranjan_rg", "value": "Niranjan_rg" },
-        "hide": 0,
-        "includeAll": false,
-        "multi": false,
-        "name": "resourceGroup",
-        "options": [],
-        "query": "ResourceGroups()",
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 1,
-        "type": "query"
-      },
-      {
-        "current": { "selected": true, "text": "All", "value": "$__all" },
-        "hide": 0,
-        "includeAll": true,
-        "multi": true,
-        "name": "containerGroup",
-        "options": [],
-        "query": "ResourceNames($resourceGroup, Microsoft.ContainerInstance/containerGroups)",
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 1,
-        "type": "query"
-      }
-    ]
+    "list": []
   },
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},

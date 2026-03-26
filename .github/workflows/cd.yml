@@ -322,7 +322,8 @@ jobs:
           
           PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/github_actions"
           
-          cat <<EOF | curl -s --data-binary @- $PUSHGATEWAY_URL || echo "Failed to push metrics to $PUSHGATEWAY_URL"
+          # Retry push up to 5 times (pushgateway might just be booting up)
+          METRICS_PAYLOAD=$(cat <<EOF
           ci_deployment_duration_seconds $X1
           ci_deployment_modified_files $X2
           ci_deployment_test_failure $X3
@@ -331,3 +332,17 @@ jobs:
           ci_deployment_success_total $SUCCESS_VAL
           ci_deployment_count_total 1
           EOF
+          )
+          
+          echo "$METRICS_PAYLOAD" > metrics.txt
+          
+          for i in 1 2 3 4 5; do
+            echo "Attempt $i to push metrics..."
+            if curl -f -v --data-binary @metrics.txt "$PUSHGATEWAY_URL"; then
+              echo "Successfully pushed DORA metrics to $PUSHGATEWAY_URL"
+              break
+            else
+              echo "Push failed. Waiting 10s..."
+              sleep 10
+            fi
+          done

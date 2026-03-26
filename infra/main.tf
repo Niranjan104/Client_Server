@@ -296,7 +296,12 @@ resource "azurerm_container_group" "monitoring" {
       mount_path = "/var/lib/grafana/dashboards"
       secret = {
         "docker_containers.json" = base64encode(file("${path.module}/../monitoring/grafana/dashboards/docker_containers.json"))
-        "azure_aci.json"         = base64encode(file("${path.module}/../monitoring/grafana/dashboards/azure_aci.json"))
+        "azure_aci.json"         = base64encode(templatefile("${path.module}/../monitoring/grafana/dashboards/azure_aci.json", {
+          rg_name     = data.azurerm_resource_group.rg.name
+          server_base = var.server_name
+          client_base = var.client_name
+          nginx_base  = "nginx-teastall"
+        }))
         "dora_metrics.json"      = base64encode(file("${path.module}/../monitoring/grafana/dashboards/dora_metrics.json"))
       }
     }
