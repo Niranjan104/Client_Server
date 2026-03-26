@@ -6,4 +6,9 @@ datasources:
     uid: azure-monitor
     isDefault: false
     jsonData:
-      azureAuthType: managed_identity
+      azureAuthType: clientsecret
+      tenantId: ${AZURE_TENANT_ID}
+      clientId: ${AZURE_CLIENT_ID}
+      subscriptionId: ${AZURE_SUBSCRIPTION_ID}
+    secureJsonData:
+      clientSecret: ${AZURE_CLIENT_SECRET}

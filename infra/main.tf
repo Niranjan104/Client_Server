@@ -16,6 +16,11 @@ terraform {
   }
 }
 
+variable "arm_client_id" { type = string }
+variable "arm_client_secret" { type = string, sensitive = true }
+variable "arm_tenant_id" { type = string }
+variable "arm_subscription_id" { type = string }
+
 provider "azurerm" {
   features {}
 }
@@ -203,10 +208,6 @@ resource "azurerm_container_group" "monitoring" {
   ip_address_type     = "Public"
   dns_name_label      = "monitoring-teastall"
 
-  identity {
-    type = "SystemAssigned"
-  }
-
   image_registry_credential {
     server   = azurerm_container_registry.acr.login_server
     username = var.acr_username
@@ -263,6 +264,13 @@ resource "azurerm_container_group" "monitoring" {
       GF_SECURITY_ADMIN_PASSWORD = "admin" # Explicitly default for review purposes
     }
 
+    secure_environment_variables = {
+      AZURE_TENANT_ID       = var.arm_tenant_id
+      AZURE_CLIENT_ID       = var.arm_client_id
+      AZURE_CLIENT_SECRET   = var.arm_client_secret
+      AZURE_SUBSCRIPTION_ID = var.arm_subscription_id
+    }
+
     volume {
       name       = "grafana-datasources"
       mount_path = "/etc/grafana/provisioning/datasources"
@@ -290,12 +298,4 @@ resource "azurerm_container_group" "monitoring" {
       }
     }
   }
-}
-
-data "azurerm_subscription" "primary" {}
-
-resource "azurerm_role_assignment" "grafana_monitoring_reader" {
-  scope                = data.azurerm_subscription.primary.id
-  role_definition_name = "Monitoring Reader"
-  principal_id         = azurerm_container_group.monitoring.identity[0].principal_id
 }
