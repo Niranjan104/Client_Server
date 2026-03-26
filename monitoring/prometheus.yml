@@ -18,3 +18,8 @@ scrape_configs:
   - job_name: "nginx"
     static_configs:
       - targets: ["nginx_exporter:9113"]
+
+  # CI/CD DORA Metrics Pushgateway
+  - job_name: "pushgateway"
+    static_configs:
+      - targets: ["pushgateway:9091", "localhost:9091"]

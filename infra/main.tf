@@ -203,6 +203,10 @@ resource "azurerm_container_group" "monitoring" {
   ip_address_type     = "Public"
   dns_name_label      = "monitoring-teastall"
 
+  identity {
+    type = "SystemAssigned"
+  }
+
   image_registry_credential {
     server   = azurerm_container_registry.acr.login_server
     username = var.acr_username
@@ -232,6 +236,18 @@ resource "azurerm_container_group" "monitoring" {
   }
 
   container {
+    name   = "pushgateway"
+    image  = "prom/pushgateway:latest"
+    cpu    = "0.25"
+    memory = "0.5"
+
+    ports {
+      port     = 9091
+      protocol = "TCP"
+    }
+  }
+
+  container {
     name   = "grafana"
     image  = "grafana/grafana:latest"
     cpu    = "0.5"
@@ -246,5 +262,40 @@ resource "azurerm_container_group" "monitoring" {
       GF_SERVER_HTTP_PORT = "3001"
       GF_SECURITY_ADMIN_PASSWORD = "admin" # Explicitly default for review purposes
     }
+
+    volume {
+      name       = "grafana-datasources"
+      mount_path = "/etc/grafana/provisioning/datasources"
+      secret = {
+        "datasource.yml"    = base64encode(file("${path.module}/../monitoring/grafana/provisioning/datasources/datasource.yml"))
+        "azure_monitor.yml" = base64encode(file("${path.module}/../monitoring/grafana/provisioning/datasources/azure_monitor.yml"))
+      }
+    }
+
+    volume {
+      name       = "grafana-dashboards-config"
+      mount_path = "/etc/grafana/provisioning/dashboards"
+      secret = {
+        "dashboards.yml" = base64encode(file("${path.module}/../monitoring/grafana/provisioning/dashboards/dashboards.yml"))
+      }
+    }
+
+    volume {
+      name       = "grafana-dashboard-jsons"
+      mount_path = "/var/lib/grafana/dashboards"
+      secret = {
+        "docker_containers.json" = base64encode(file("${path.module}/../monitoring/grafana/dashboards/docker_containers.json"))
+        "azure_aci.json"         = base64encode(file("${path.module}/../monitoring/grafana/dashboards/azure_aci.json"))
+        "dora_metrics.json"      = base64encode(file("${path.module}/../monitoring/grafana/dashboards/dora_metrics.json"))
+      }
+    }
   }
+}
+
+data "azurerm_subscription" "primary" {}
+
+resource "azurerm_role_assignment" "grafana_monitoring_reader" {
+  scope                = data.azurerm_subscription.primary.id
+  role_definition_name = "Monitoring Reader"
+  principal_id         = azurerm_container_group.monitoring.identity[0].principal_id
 }

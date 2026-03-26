@@ -51,3 +51,17 @@ Grafana is now **pre-configured** with the Prometheus Data Source and an out-of-
 3. In the left menu, go to **Dashboards**.
 4. Click on **Docker System Metrics**.
 5. You will instantly see live graphs for your CPU, RAM, Network Traffic, and Prometheus HTTP Requests!
+
+## 3. Cloud Metrics (Azure Monitor + Grafana)
+
+When the application is deployed to Azure Container Instances (ACI), local tools like `cAdvisor` cannot be used since ACI is a serverless environment that prohibits privileged host access.
+
+Instead, the cloud deployment natively utilizes **Azure Monitor** to track CPU, Memory, and Network traffic for all your containers for free!
+
+**How the Cloud Grafana Works:**
+When Terraform provisions the `monitoring-teastall` Container Group:
+1. It assigns a **System Assigned Managed Identity** to the Grafana container.
+2. It grants this identity the **Monitoring Reader** role.
+3. It mounts a pre-configured `Azure Monitor` data source and an `Azure ACI Metrics` dashboard directly into the Grafana container using secure ACI Secret Volumes.
+
+This means you can log into `http://monitoring-teastall.centralindia.azurecontainer.io:3001`, navigate to Dashboards -> **Azure ACI Metrics**, and immediately view your live cloud performance data with absolutely zero manual authentication or secret management required!

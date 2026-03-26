@@ -275,3 +275,59 @@ jobs:
           curl -H "Content-Type: application/json" \
                -d "{\"content\": \"$MESSAGE\", \"text\": \"$MESSAGE\"}" \
                $WEBHOOK_URL
+
+      - name: Push DORA Metrics to Prometheus Pushgateway
+        if: always()
+        run: |
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - DEPLOY_START_TIME))
+          
+          # x1: Build duration
+          X1=$DURATION
+          
+          # x2: Number of modified files
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            X2=$(git diff --name-only HEAD~1 HEAD | wc -l)
+          else
+            X2=$(git ls-files | wc -l)
+          fi
+          
+          # x3: Test failure (0 for success, 1 for failure). We use job status.
+          JOB_STATUS="${{ job.status }}"
+          if [ "$JOB_STATUS" = "success" ]; then
+            X3=0
+            SUCCESS_VAL=1
+          else
+            X3=1
+            SUCCESS_VAL=0
+          fi
+          
+          # xn: Code complexity score (using an approximation based on modified files)
+          XN=$((10 + X2 / 2))
+          
+          # Logistic Regression Formula matching Quantitative Performance Analysis
+          # P = 1 / (1 + e^-(B0 + B1*X1 + B2*X2 + B3*X3 + Bn*Xn))
+          PROBABILITY=$(awk -v x1="$X1" -v x2="$X2" -v x3="$X3" -v xn="$XN" 'BEGIN {
+            z = -3.0 + (0.01 * x1) + (0.05 * x2) + (2.0 * x3) + (0.1 * xn);
+            p = 1 / (1 + exp(-z));
+            printf "%.4f", p;
+          }')
+          
+          echo "DORA Metrics Computed:"
+          echo "  Duration (x1): $X1"
+          echo "  Modified Files (x2): $X2"
+          echo "  Failure Status (x3): $X3"
+          echo "  Complexity (xn): $XN"
+          echo "  Failure Probability (P): $PROBABILITY"
+          
+          PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/github_actions"
+          
+          cat <<EOF | curl -s --data-binary @- $PUSHGATEWAY_URL || echo "Failed to push metrics to $PUSHGATEWAY_URL"
+          ci_deployment_duration_seconds $X1
+          ci_deployment_modified_files $X2
+          ci_deployment_test_failure $X3
+          ci_deployment_complexity_score $XN
+          ci_deployment_failure_probability $PROBABILITY
+          ci_deployment_success_total $SUCCESS_VAL
+          ci_deployment_count_total 1
+          EOF

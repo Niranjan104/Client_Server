@@ -108,6 +108,17 @@ services:
     profiles:
       - monitoring
 
+  # ── Monitoring: Pushgateway (DORA Metrics) ────────────────────────────────
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: pushgateway
+    ports:
+      - "9091:9091"
+    networks:
+      - app_net
+    profiles:
+      - monitoring
+
   # ── Monitoring: cAdvisor (Docker Container Metrics) ───────────────────────
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.47.0

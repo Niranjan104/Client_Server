@@ -1,0 +1,141 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 0, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "auto", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 80 } ] } }, "overrides": [] },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        {
+          "azureMonitor": {
+            "aggregation": "Average",
+            "metricName": "CPUUsage",
+            "metricNamespace": "Microsoft.ContainerInstance/containerGroups",
+            "timeGrain": "auto",
+            "resources": [ {"resourceGroup": "$resourceGroup", "resourceName": "$containerGroup"} ]
+          },
+          "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
+          "refId": "A"
+        }
+      ],
+      "title": "CPU Usage (Cores)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 0, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "auto", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 80 } ] } }, "overrides": [] },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        {
+          "azureMonitor": {
+            "aggregation": "Average",
+            "metricName": "MemoryUsage",
+            "metricNamespace": "Microsoft.ContainerInstance/containerGroups",
+            "timeGrain": "auto",
+            "resources": [ {"resourceGroup": "$resourceGroup", "resourceName": "$containerGroup"} ]
+          },
+          "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
+          "refId": "A"
+        }
+      ],
+      "title": "Memory Usage (Bytes)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 0, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "auto", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 80 } ] } }, "overrides": [] },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 10 },
+      "id": 3,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        {
+          "azureMonitor": {
+            "aggregation": "Average",
+            "metricName": "NetworkBytesReceivedRate",
+            "metricNamespace": "Microsoft.ContainerInstance/containerGroups",
+            "timeGrain": "auto",
+            "resources": [ {"resourceGroup": "$resourceGroup", "resourceName": "$containerGroup"} ]
+          },
+          "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
+          "refId": "A"
+        }
+      ],
+      "title": "Network Received (Bytes/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 0, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "auto", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 80 } ] } }, "overrides": [] },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 10 },
+      "id": 4,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        {
+          "azureMonitor": {
+            "aggregation": "Average",
+            "metricName": "NetworkBytesTransmittedRate",
+            "metricNamespace": "Microsoft.ContainerInstance/containerGroups",
+            "timeGrain": "auto",
+            "resources": [ {"resourceGroup": "$resourceGroup", "resourceName": "$containerGroup"} ]
+          },
+          "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
+          "refId": "A"
+        }
+      ],
+      "title": "Network Transmitted (Bytes/s)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "Niranjan_rg", "value": "Niranjan_rg" },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "resourceGroup",
+        "options": [],
+        "query": "ResourceGroups()",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "containerGroup",
+        "options": [],
+        "query": "ResourceNames($resourceGroup, Microsoft.ContainerInstance/containerGroups)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Azure ACI Metrics",
+  "uid": "azure-aci-metrics-db",
+  "version": 1
+}
