@@ -71,8 +71,8 @@
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
+            "axisLabel": "Successful builds / sec",
+            "axisPlacement": "left",
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
@@ -142,7 +142,11 @@
         }
       ],
       "title": "CI Pipeline Throughput",
-      "type": "timeseries"
+      "type": "timeseries",
+      "custom": {
+        "axisLabel": "Time",
+        "axisPlacement": "bottom"
+      }
     },
     {
       "datasource": "Prometheus",
@@ -301,7 +305,7 @@
       },
       "targets": [
         {
-          "expr": "sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)) / clamp_min($__range_s / 86400, 1)",
+          "expr": "sum(increase(ci_deployment_count_total{job=\"github_actions\"}[$__range])) / clamp_min($__range_s / 86400, 1)",
           "legendFormat": "Deploys / day",
           "refId": "A"
         }
