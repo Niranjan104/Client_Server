@@ -305,7 +305,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(ci_deployment_count_total{job=\"github_actions\"}[$__range])) * 86400",
+          "expr": "sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
           "legendFormat": "Deploys / day",
           "refId": "A"
         }
