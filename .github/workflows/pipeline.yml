@@ -1023,6 +1023,28 @@ jobs:
         run: |
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - DEPLOY_START_TIME))
+          DEPLOYED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+
+          SERVER_MIN_REPLICAS=$(echo "${{ vars.SERVER_MIN_REPLICAS }}" | tr -d '\r\n')
+          SERVER_MAX_REPLICAS=$(echo "${{ vars.SERVER_MAX_REPLICAS }}" | tr -d '\r\n')
+          SERVER_HTTP_CONCURRENCY=$(echo "${{ vars.SERVER_HTTP_CONCURRENCY }}" | tr -d '\r\n')
+          CLIENT_MIN_REPLICAS=$(echo "${{ vars.CLIENT_MIN_REPLICAS }}" | tr -d '\r\n')
+          CLIENT_MAX_REPLICAS=$(echo "${{ vars.CLIENT_MAX_REPLICAS }}" | tr -d '\r\n')
+          CLIENT_HTTP_CONCURRENCY=$(echo "${{ vars.CLIENT_HTTP_CONCURRENCY }}" | tr -d '\r\n')
+          NGINX_MIN_REPLICAS=$(echo "${{ vars.NGINX_MIN_REPLICAS }}" | tr -d '\r\n')
+          NGINX_MAX_REPLICAS=$(echo "${{ vars.NGINX_MAX_REPLICAS }}" | tr -d '\r\n')
+          NGINX_HTTP_CONCURRENCY=$(echo "${{ vars.NGINX_HTTP_CONCURRENCY }}" | tr -d '\r\n')
+
+          SERVER_MIN_REPLICAS=${SERVER_MIN_REPLICAS:-0}
+          SERVER_MAX_REPLICAS=${SERVER_MAX_REPLICAS:-10}
+          SERVER_HTTP_CONCURRENCY=${SERVER_HTTP_CONCURRENCY:-50}
+          CLIENT_MIN_REPLICAS=${CLIENT_MIN_REPLICAS:-0}
+          CLIENT_MAX_REPLICAS=${CLIENT_MAX_REPLICAS:-5}
+          CLIENT_HTTP_CONCURRENCY=${CLIENT_HTTP_CONCURRENCY:-80}
+          NGINX_MIN_REPLICAS=${NGINX_MIN_REPLICAS:-1}
+          NGINX_MAX_REPLICAS=${NGINX_MAX_REPLICAS:-5}
+          NGINX_HTTP_CONCURRENCY=${NGINX_HTTP_CONCURRENCY:-100}
 
           # x1: Build duration
           X1=$DURATION
@@ -1080,6 +1102,7 @@ jobs:
 
           LEGACY_PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/github_actions"
           PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/github_actions/run_id/${{ github.run_id }}"
+          RUNTIME_PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/aca_runtime_state/environment/live"
 
           # Retry push up to 5 times (pushgateway might just be booting up)
           METRICS_PAYLOAD=$(cat <<EOF
@@ -1109,3 +1132,42 @@ jobs:
               sleep 10
             fi
           done
+
+          if [ "$JOB_STATUS" = "success" ]; then
+            ACTIVE_SLOT=$(echo "${{ steps.deploy.outputs.active_slot }}" | tr -d '\r\n')
+            SERVER_BASE=$(echo "${{ secrets.SERVER_BASE_NAME }}" | tr -d '\r\n')
+            CLIENT_BASE=$(echo "${{ secrets.CLIENT_BASE_NAME }}" | tr -d '\r\n')
+            NGINX_LABEL=$(echo "${{ secrets.NGINX_DNS_LABEL }}" | tr -d '\r\n')
+            PUBLIC_URL=$(echo "${{ steps.deploy.outputs.public_url }}" | tr -d '\r\n')
+            BUILD_NUMBER="${{ github.run_number }}"
+            BUILD_ATTEMPT="${{ github.run_attempt }}"
+
+            RUNTIME_PAYLOAD=$(cat <<EOF
+            ci_runtime_release_info{slot="$ACTIVE_SLOT",version="$ACTIVE_SLOT",sha="${{ github.sha }}",short_sha="$SHORT_SHA",run_id="${{ github.run_id }}",run_number="$BUILD_NUMBER",run_attempt="$BUILD_ATTEMPT",server_app="${SERVER_BASE}-${ACTIVE_SLOT}",client_app="${CLIENT_BASE}-${ACTIVE_SLOT}",nginx_app="$NGINX_LABEL",public_url="$PUBLIC_URL",deployed_at="$DEPLOYED_AT"} 1
+            ci_runtime_scale_min{component="server"} $SERVER_MIN_REPLICAS
+            ci_runtime_scale_max{component="server"} $SERVER_MAX_REPLICAS
+            ci_runtime_http_concurrency{component="server"} $SERVER_HTTP_CONCURRENCY
+            ci_runtime_scale_min{component="client"} $CLIENT_MIN_REPLICAS
+            ci_runtime_scale_max{component="client"} $CLIENT_MAX_REPLICAS
+            ci_runtime_http_concurrency{component="client"} $CLIENT_HTTP_CONCURRENCY
+            ci_runtime_scale_min{component="nginx"} $NGINX_MIN_REPLICAS
+            ci_runtime_scale_max{component="nginx"} $NGINX_MAX_REPLICAS
+            ci_runtime_http_concurrency{component="nginx"} $NGINX_HTTP_CONCURRENCY
+            ci_runtime_deployment_duration_seconds $DURATION
+            ci_runtime_deployment_timestamp_seconds $END_TIME
+            EOF
+            )
+
+            echo "$RUNTIME_PAYLOAD" > runtime_metrics.txt
+
+            for i in 1 2 3 4 5; do
+              echo "Attempt $i to push runtime state metrics..."
+              if curl -f -X PUT --data-binary @runtime_metrics.txt "$RUNTIME_PUSHGATEWAY_URL"; then
+                echo "Successfully pushed runtime state metrics to $RUNTIME_PUSHGATEWAY_URL"
+                break
+              else
+                echo "Runtime state push failed. Waiting 10s..."
+                sleep 10
+              fi
+            done
+          fi

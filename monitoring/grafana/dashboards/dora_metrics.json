@@ -72,7 +72,7 @@
           "refId": "A"
         }
       ],
-      "title": "Latest Failure Probability",
+      "title": "Latest Deployment Failure Probability",
       "type": "gauge"
     },
     {
@@ -502,7 +502,7 @@
           "refId": "C"
         }
       ],
-      "title": "Latest Risk Drivers",
+      "title": "Latest Deployment Risk Drivers",
       "type": "bargauge"
     },
     {

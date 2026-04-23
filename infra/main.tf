@@ -159,6 +159,12 @@ resource "azurerm_container_group" "monitoring" {
           client_base = var.client_name
           nginx_base  = var.nginx_dns_label
         }))
+        "aca_runtime_analysis.json" = base64encode(templatefile("${path.module}/../monitoring/grafana/dashboards/aca_runtime_analysis.json", {
+          rg_name     = data.azurerm_resource_group.rg.name
+          server_base = var.server_name
+          client_base = var.client_name
+          nginx_base  = var.nginx_dns_label
+        }))
         "dora_metrics.json" = base64encode(file("${path.module}/../monitoring/grafana/dashboards/dora_metrics.json"))
       }
     }
