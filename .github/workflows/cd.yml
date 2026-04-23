@@ -69,35 +69,38 @@ jobs:
           username: ${{ steps.acr.outputs.username }}
           password: ${{ steps.acr.outputs.password }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and Push Server Image
         run: |
-          docker build \
+          docker buildx build --push \
+            --cache-from type=gha,scope=server \
+            --cache-to type=gha,mode=max,scope=server \
             -t ${{ steps.acr.outputs.login_server }}/server:${{ github.sha }} \
             -t ${{ steps.acr.outputs.login_server }}/server:latest \
             ./server
-          docker push ${{ steps.acr.outputs.login_server }}/server:${{ github.sha }}
-          docker push ${{ steps.acr.outputs.login_server }}/server:latest
 
       - name: Build and Push Client Image
         run: |
           NGINX_LABEL=$(echo "${{ secrets.NGINX_DNS_LABEL }}" | tr -d '\r\n')
 
-          docker build \
+          docker buildx build --push \
+            --cache-from type=gha,scope=client \
+            --cache-to type=gha,mode=max,scope=client \
             --build-arg NEXT_PUBLIC_API_URL="http://${NGINX_LABEL}.centralindia.azurecontainer.io/api" \
             -t ${{ steps.acr.outputs.login_server }}/client:${{ github.sha }} \
             -t ${{ steps.acr.outputs.login_server }}/client:latest \
             ./client
-          docker push ${{ steps.acr.outputs.login_server }}/client:${{ github.sha }}
-          docker push ${{ steps.acr.outputs.login_server }}/client:latest
 
       - name: Build and Push NGINX Image
         run: |
-          docker build \
+          docker buildx build --push \
+            --cache-from type=gha,scope=nginx \
+            --cache-to type=gha,mode=max,scope=nginx \
             -t ${{ steps.acr.outputs.login_server }}/nginx:${{ github.sha }} \
             -t ${{ steps.acr.outputs.login_server }}/nginx:latest \
             ./nginx
-          docker push ${{ steps.acr.outputs.login_server }}/nginx:${{ github.sha }}
-          docker push ${{ steps.acr.outputs.login_server }}/nginx:latest
 
       - name: Deploy to Inactive Slot and Flip Traffic
         id: deploy
@@ -310,7 +313,7 @@ jobs:
           # Logistic Regression Formula matching Quantitative Performance Analysis
           # P = 1 / (1 + e^-(B0 + B1*X1 + B2*X2 + B3*X3 + Bn*Xn))
           PROBABILITY=$(awk -v x1="$X1" -v x2="$X2" -v x3="$X3" -v xn="$XN" 'BEGIN {
-            z = -3.0 + (0.01 * x1) + (0.05 * x2) + (2.0 * x3) + (0.1 * xn);
+            z = -3.0 + (0.002 * x1) + (0.05 * x2) + (2.0 * x3) + (0.1 * xn);
             p = 1 / (1 + exp(-z));
             printf "%.4f", p;
           }')
