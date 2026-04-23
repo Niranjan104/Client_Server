@@ -4,7 +4,6 @@ services:
   server_blue:
     build:
       context: ./server
-    container_name: server_blue
     environment:
       - PORT=8080
       - APP_VERSION=blue
@@ -16,7 +15,6 @@ services:
   server_green:
     build:
       context: ./server
-    container_name: server_green
     environment:
       - PORT=8080
       - APP_VERSION=green
@@ -32,7 +30,6 @@ services:
       args:
         # Points to NGINX (which internally routes /api to server_blue)
         NEXT_PUBLIC_API_URL: http://localhost/api
-    container_name: client_blue
     environment:
       - PORT=3000
     expose:
@@ -47,7 +44,6 @@ services:
       context: ./client
       args:
         NEXT_PUBLIC_API_URL: http://localhost/api
-    container_name: client_green
     environment:
       - PORT=3000
     expose:
@@ -58,7 +54,6 @@ services:
       - app_net
 
   # ── NGINX Traffic Router ───────────────────────────────────────────────────
-  # Change ACTIVE_COLOR=green and restart this service to switch slots
   nginx:
     build:
       context: ./nginx
@@ -66,11 +61,9 @@ services:
     ports:
       - "80:80"
     environment:
-      - ACTIVE_COLOR=${ACTIVE_COLOR:-blue}
-      - BLUE_SERVER_HOST=server_blue
-      - GREEN_SERVER_HOST=server_green
-      - BLUE_CLIENT_HOST=client_blue
-      - GREEN_CLIENT_HOST=client_green
+      - BACKEND_UPSTREAM_URL=${BACKEND_UPSTREAM_URL:-http://server_blue:8080}
+      - CLIENT_UPSTREAM_URL=${CLIENT_UPSTREAM_URL:-http://client_blue:3000}
+      - PLATFORM=local-compose
       - RESOLVER_IP=127.0.0.11
     depends_on:
       - client_blue

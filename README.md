@@ -1,30 +1,61 @@
-# Cloud-Native Blue/Green CI/CD Pipeline Template
+# Cloud-Native Azure Container Apps CI/CD Pipeline Template
 
-Welcome to the Cloud-Native Blue/Green Deployment Template! This repository is designed to be a **reusable pipeline template** for any web application (e.g., MERN, Next.js, PERN stacks) deploying to Azure Container Instances (ACI). 
+Welcome to the Cloud-Native Azure Container Apps Deployment Template. This repository is designed to be a **reusable pipeline template** for any web application (for example MERN, Next.js, or PERN stacks) deploying to Azure Container Apps with HTTP autoscaling.
 
 Currently, this repository contains a placeholder "Tea Stall" application, but it is structurally built so you can easily strip out the dummy code and insert your own frontend and backend projects smoothly.
 
 ## 🏗️ Architecture Flow
 
-The CI/CD pipeline ensures zero-downtime deployments via a dynamically routed NGINX gateway.
+The CI/CD pipeline builds container images, pushes them to Azure Container Registry, and deploys the app stack to Azure Container Apps behind an NGINX gateway.
 
 ```mermaid
 graph TD;
     Developer-->|Pushes to main branch|GitHubActions[GitHub Actions CI/CD]
     GitHubActions-->|Builds & Scans Docker Images|ACR[(Azure Container Registry)]
     
-    subgraph Azure Container Instances
-        ACR-->|Deploys to inactive slot|GreenSlot[Green Slot ACI]
-        ACR-->|Deploys to inactive slot|BlueSlot[Blue Slot ACI]
-        
-        NGINX[NGINX Gateway Router]
-        
-        NGINX-.->|Routes active traffic|BlueSlot
-        NGINX-.->|Routes active traffic|GreenSlot
+    subgraph Azure Container Apps
+        NGINX[NGINX Gateway Container App]
+        Client[Frontend Container App]
+        Server[Backend Container App]
+
+        NGINX-->|Routes /*|Client
+        NGINX-->|Routes /api/*|Server
+        ACA[Container Apps HTTP Autoscaler]
+        ACA-.->|Adds/removes replicas|NGINX
+        ACA-.->|Adds/removes replicas|Client
+        ACA-.->|Adds/removes replicas|Server
     end
     
     User-->|Visits Public IP/Domain|NGINX
 ```
+
+---
+
+## Scaling and Load Balancing
+
+Scaling and load balancing are now handled by Azure Container Apps:
+
+* **Terraform baseline:** `infra/main.tf` creates the shared Azure Container Apps environment and Log Analytics workspace.
+* **GitHub Actions deployment:** `.github/workflows/pipeline.yml` creates or updates the `server`, `client`, and `nginx` Container Apps after Docker images are pushed to ACR.
+* **Autoscaling:** each Container App has an HTTP concurrency scale rule with configurable min/max replicas.
+* **Load balancing:** Azure Container Apps automatically load balances traffic across healthy replicas of each app. NGINX routes `/api/*` to the backend app URL and all other traffic to the frontend app URL.
+* **Local Compose:** `docker-compose.yml` still runs the same gateway pattern locally using `BACKEND_UPSTREAM_URL` and `CLIENT_UPSTREAM_URL`.
+
+To tune production scale, add or update GitHub Actions repository variables:
+
+```text
+SERVER_MIN_REPLICAS=0
+SERVER_MAX_REPLICAS=10
+SERVER_HTTP_CONCURRENCY=50
+CLIENT_MIN_REPLICAS=0
+CLIENT_MAX_REPLICAS=5
+CLIENT_HTTP_CONCURRENCY=80
+NGINX_MIN_REPLICAS=1
+NGINX_MAX_REPLICAS=5
+NGINX_HTTP_CONCURRENCY=100
+```
+
+Set `MIN_REPLICAS=0` for the cheapest scale-to-zero behavior. Set `MIN_REPLICAS=1` if you want fewer cold starts.
 
 ---
 
@@ -63,13 +94,11 @@ Once created, map the following secrets into your GitHub repository settings und
     * **Windows:** `.\scripts\generate_credentials.ps1`
     * **Mac/Linux:** `bash ./scripts/generate_credentials.sh`
     The script will automatically authenticate with Azure and output the exact JSON block you need to copy and paste directly into the secret.
-*   **`ACI_RESOURCE_GROUP`**: The exact name you used for `$RG_NAME`.
-*   **`ACR_LOGIN_SERVER`**: The URL of your registry, usually `<your-acr-name>.azurecr.io`
-*   **`ACR_USERNAME`**: The ACR Admin username (found in Azure Portal -> The ACR Resource -> Access Keys).
-*   **`ACR_PASSWORD`**: The ACR Admin password.
-*   **`CLIENT_BASE_NAME`**: Set to `client-myapp` (or any label you want for your frontend).
-*   **`SERVER_BASE_NAME`**: Set to `server-myapp` (or any label you want for your backend).
-*   **`NGINX_DNS_LABEL`**: Must be globally unique, e.g., `nginx-router-myapp888`.
+*   **`ACI_RESOURCE_GROUP`**: The exact name you used for `$RG_NAME`. The name is kept for backwards compatibility with the existing workflow.
+*   **`ACR_NAME`**: The short ACR name, for example `myappregistry123`.
+*   **`CLIENT_BASE_NAME`**: Azure Container App name for the frontend, for example `client-myapp`.
+*   **`SERVER_BASE_NAME`**: Azure Container App name for the backend, for example `server-myapp`.
+*   **`NGINX_DNS_LABEL`**: Azure Container App name for the public gateway, for example `nginx-myapp`.
 
 ---
 
@@ -78,13 +107,13 @@ Once created, map the following secrets into your GitHub repository settings und
 This repository logically separates the stack into 3 core standalone directories:
 1. `client/` - The frontend application (currently a dummy Next.js App)
 2. `server/` - The backend API (currently a dummy Node.js App)
-3. `nginx/` - The Gateway Configuration (**Leave this alone**, it is highly coupled to the CD script to handle the Blue/Green traffic routing algorithm).
+3. `nginx/` - The gateway configuration that routes browser traffic to the frontend and `/api/*` traffic to the backend Container App.
 
 **To integrate your own application:**
 1. Delete all the files inside the `client/` folder. Paste your own React/Next.js/Vue frontend code inside it.
 2. Delete all the files inside the `server/` folder. Paste your backend API (Node/Python/Go) inside it.
 3. **CRITICAL:** Ensure both your new `client` and `server` folders have their own valid `Dockerfile` at their root level. The CI/CD pipeline hardcodes its search for exactly `./client/Dockerfile` and `./server/Dockerfile`.
-4. The NGINX proxy routes traffic assuming your server exposes `PORT 8080`, and your client exposes `PORT 3000`. Please update your apps to run on these ports, or modify them in `cd.yml` and `nginx/nginx.conf`.
+4. The NGINX proxy routes traffic assuming your server exposes `PORT 8080`, and your client exposes `PORT 3000`. Please update your apps to run on these ports, or modify `.github/workflows/pipeline.yml` and `nginx/nginx.conf`.
 
 Once pushed to `main`, the GitHub Action detects your new code, packages it, and deploys it automatically without you touching Azure!
 
@@ -93,25 +122,25 @@ Once pushed to `main`, the GitHub Action detects your new code, packages it, and
 ## 📊 3. Monitoring, Logs, and Deployment Tracking
 
 ### Where to see how things are working?
-Since this architecture utilizes serverless Azure Container Instances (ACI), you do not need to configure complex Kubernetes clusters or Prometheus logging. It is built natively into Azure.
+Since this architecture uses Azure Container Apps, replica count, CPU, memory, requests, and logs are available in the Azure Portal under each Container App.
 
 1. **Viewing Live Application Logs:** 
    * Navigate to the **Azure Portal**.
    * Go to your **Resource Group** (`rg-app-prod`).
-   * Click on the currently running Container Instance (e.g., `client-myapp-green` or `nginx-router-myapp888`).
-   * On the left sidebar panel, click **Containers** -> **Logs**. Here you will see the exact live `console.log` stream and standard output of your software.
+   * Click on the currently running Container App, for example `client-myapp`, `server-myapp`, or `nginx-myapp`.
+   * Open **Log stream** or the connected **Log Analytics** workspace to inspect runtime logs.
    
 2. **Viewing Server Health & Metrics:**
-   * In that same Container Instance blade, click **Metrics** on the left sidebar to chart out CPU usage, Memory limits, and Network Bytes received.
+   * In that same Container App blade, click **Metrics** to chart replica count, requests, CPU, memory, and network usage.
 
 3. **Where to track Deployment Time?**
    * Go to the **Actions** tab on your GitHub Repository.
-   * Click on the latest workflow run. The UI will show you precisely which jobs ran (Linting, Scanning, Building, Deploying) and exactly how long the pipeline took to complete the Blue/Green swap (typically around 3-5 minutes).
+   * Click on the latest workflow run. The UI shows validation, scanning, image build, Container Apps deployment, smoke tests, and DORA metric publishing.
 
 ---
 
 ## 🛡️ Built-in Quality Controls
 
-* **Zero-Downtime:** The NGINX router Hot-Reloads the traffic configuration seamlessly. Users will not drop connections during an update.
+* **Autoscaling:** Azure Container Apps scales NGINX, frontend, and backend replicas based on concurrent HTTP traffic.
 * **Code Scanning:** `ci.yml` embeds Trivy image scanning, ensuring no Docker image with a Critical OS-level Vulnerability reaches production.
-* **Cost Optimized:** `cd.yml` includes an aggressive teardown step. Only one production slot runs at a time. The unused backup containers are deleted instantly after a successful deployment, cleanly halving your Azure billing.
+* **Cost Optimized:** Container Apps can scale to zero when `MIN_REPLICAS=0`; keep `MIN_REPLICAS=1` only where you want warm capacity.

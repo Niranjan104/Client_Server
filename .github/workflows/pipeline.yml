@@ -184,8 +184,10 @@ jobs:
 
           # 2. Register required resource providers (resolves false-positive SubscriptionNotFound errors)
           echo "Ensuring required Azure Resource Providers are registered..."
-          az provider register --namespace Microsoft.Storage
-          az provider register --namespace Microsoft.ContainerInstance
+          az provider register --namespace Microsoft.Storage --wait
+          az provider register --namespace Microsoft.ContainerInstance --wait
+          az provider register --namespace Microsoft.App --wait
+          az provider register --namespace Microsoft.OperationalInsights --wait
 
           # 3. Wait up to 60 seconds if Role Assignment hasn't propagated yet
           SUCCESS=false
@@ -262,6 +264,9 @@ jobs:
           RG_NAME=$(echo '${{ secrets.ACI_RESOURCE_GROUP }}' | tr -d '\r\n')
           SERVER_NAME=$(echo '${{ secrets.SERVER_BASE_NAME }}' | tr -d '\r\n')
           CLIENT_NAME=$(echo '${{ secrets.CLIENT_BASE_NAME }}' | tr -d '\r\n')
+          NGINX_LABEL=$(echo '${{ secrets.NGINX_DNS_LABEL }}' | tr -d '\r\n')
+          ACA_ENV_NAME=$(echo '${{ vars.CONTAINER_APP_ENVIRONMENT_NAME }}' | tr -d '\r\n')
+          LAW_NAME=$(echo '${{ vars.LOG_ANALYTICS_WORKSPACE_NAME }}' | tr -d '\r\n')
 
           if az acr show --name "$ACR_NAME" --query "name" --output tsv >/dev/null 2>&1; then
             echo "ACR '$ACR_NAME' already exists. Skipping bootstrap."
@@ -277,10 +282,10 @@ jobs:
             -var="acr_password=bootstrap" \
             -var="server_name=$SERVER_NAME" \
             -var="client_name=$CLIENT_NAME" \
+            -var="nginx_dns_label=$NGINX_LABEL" \
+            -var="container_app_environment_name=$ACA_ENV_NAME" \
+            -var="log_analytics_workspace_name=$LAW_NAME" \
             -var="tf_state_storage_account=$TF_STATE_ACCOUNT" \
-            -var="active_color=blue" \
-            -var="blue_image_tag=initial" \
-            -var="green_image_tag=initial" \
             -var="arm_client_id=$ARM_CLIENT_ID" \
             -var="arm_client_secret=$ARM_CLIENT_SECRET" \
             -var="arm_tenant_id=$ARM_TENANT_ID" \
@@ -308,17 +313,9 @@ jobs:
           ACR_PASSWORD=$(echo "$ACR_PASSWORD_RUNTIME" | tr -d '\r\n')
           SERVER_NAME=$(echo '${{ secrets.SERVER_BASE_NAME }}' | tr -d '\r\n')
           CLIENT_NAME=$(echo '${{ secrets.CLIENT_BASE_NAME }}' | tr -d '\r\n')
-
-          # To break the cyclic dependency between Terraform building the registry and the CD pipeline
-          # pushing the images, we dynamically check if the ACR actually has our images yet.
-          # If it doesn't, we instruct Terraform to use public placeholder images ("initial" tag).
-          if az acr repository show --name "$ACR_NAME" --image server:latest &> /dev/null; then
-            echo "Custom images found in registry. Deploying latest application builds."
-            IMAGE_TAG="latest"
-          else
-            echo "Registry is empty (First Run). Deploying public placeholder images."
-            IMAGE_TAG="initial"
-          fi
+          NGINX_LABEL=$(echo '${{ secrets.NGINX_DNS_LABEL }}' | tr -d '\r\n')
+          ACA_ENV_NAME=$(echo '${{ vars.CONTAINER_APP_ENVIRONMENT_NAME }}' | tr -d '\r\n')
+          LAW_NAME=$(echo '${{ vars.LOG_ANALYTICS_WORKSPACE_NAME }}' | tr -d '\r\n')
 
           terraform plan \
             -var="resource_group_name=$RG_NAME" \
@@ -327,10 +324,10 @@ jobs:
             -var="acr_password=$ACR_PASSWORD" \
             -var="server_name=$SERVER_NAME" \
             -var="client_name=$CLIENT_NAME" \
+            -var="nginx_dns_label=$NGINX_LABEL" \
+            -var="container_app_environment_name=$ACA_ENV_NAME" \
+            -var="log_analytics_workspace_name=$LAW_NAME" \
             -var="tf_state_storage_account=$TF_STATE_ACCOUNT" \
-            -var="active_color=blue" \
-            -var="blue_image_tag=$IMAGE_TAG" \
-            -var="green_image_tag=$IMAGE_TAG" \
             -var="arm_client_id=$ARM_CLIENT_ID" \
             -var="arm_client_secret=$ARM_CLIENT_SECRET" \
             -var="arm_tenant_id=$ARM_TENANT_ID" \
@@ -414,12 +411,10 @@ jobs:
 
       - name: Build and Push Client Image
         run: |
-          NGINX_LABEL=$(echo "${{ secrets.NGINX_DNS_LABEL }}" | tr -d '\r\n')
-
           docker buildx build --push \
             --cache-from type=gha,scope=client \
             --cache-to type=gha,mode=max,scope=client \
-            --build-arg NEXT_PUBLIC_API_URL="http://${NGINX_LABEL}.centralindia.azurecontainer.io/api" \
+            --build-arg NEXT_PUBLIC_API_URL="/api" \
             -t ${{ steps.acr.outputs.login_server }}/client:${{ github.sha }} \
             -t ${{ steps.acr.outputs.login_server }}/client:latest \
             ./client
@@ -433,7 +428,7 @@ jobs:
             -t ${{ steps.acr.outputs.login_server }}/nginx:latest \
             ./nginx
 
-      - name: Deploy to Inactive Slot and Flip Traffic
+      - name: Deploy Azure Container Apps with HTTP Autoscaling
         id: deploy
         run: |
           RG=$(echo "${{ secrets.ACI_RESOURCE_GROUP }}" | tr -d '\r\n')
@@ -443,115 +438,249 @@ jobs:
           NGINX_LABEL=$(echo "${{ secrets.NGINX_DNS_LABEL }}" | tr -d '\r\n')
           SERVER_BASE=$(echo "${{ secrets.SERVER_BASE_NAME }}" | tr -d '\r\n')
           CLIENT_BASE=$(echo "${{ secrets.CLIENT_BASE_NAME }}" | tr -d '\r\n')
+          ACA_ENV_NAME=$(echo "${{ vars.CONTAINER_APP_ENVIRONMENT_NAME }}" | tr -d '\r\n')
+          LEGACY_CLEANUP_LIMIT=$(echo "${{ vars.REPLICA_CLEANUP_LIMIT }}" | tr -d '\r\n')
 
-          ACTIVE_COLOR=$(az container show \
-            --name "$NGINX_LABEL" \
-            --resource-group "$RG" \
-            --query "containers[0].environmentVariables[?name=='ACTIVE_COLOR'].value | [0]" \
-            --output tsv 2>/dev/null || echo "blue")
+          SERVER_MIN_REPLICAS=$(echo "${{ vars.SERVER_MIN_REPLICAS }}" | tr -d '\r\n')
+          SERVER_MAX_REPLICAS=$(echo "${{ vars.SERVER_MAX_REPLICAS }}" | tr -d '\r\n')
+          SERVER_HTTP_CONCURRENCY=$(echo "${{ vars.SERVER_HTTP_CONCURRENCY }}" | tr -d '\r\n')
+          CLIENT_MIN_REPLICAS=$(echo "${{ vars.CLIENT_MIN_REPLICAS }}" | tr -d '\r\n')
+          CLIENT_MAX_REPLICAS=$(echo "${{ vars.CLIENT_MAX_REPLICAS }}" | tr -d '\r\n')
+          CLIENT_HTTP_CONCURRENCY=$(echo "${{ vars.CLIENT_HTTP_CONCURRENCY }}" | tr -d '\r\n')
+          NGINX_MIN_REPLICAS=$(echo "${{ vars.NGINX_MIN_REPLICAS }}" | tr -d '\r\n')
+          NGINX_MAX_REPLICAS=$(echo "${{ vars.NGINX_MAX_REPLICAS }}" | tr -d '\r\n')
+          NGINX_HTTP_CONCURRENCY=$(echo "${{ vars.NGINX_HTTP_CONCURRENCY }}" | tr -d '\r\n')
 
-          if [ -z "$ACTIVE_COLOR" ] || [ "$ACTIVE_COLOR" = "None" ]; then
-            ACTIVE_COLOR="blue"
-          fi
+          ACA_ENV_NAME=${ACA_ENV_NAME:-cae-$NGINX_LABEL}
+          LEGACY_CLEANUP_LIMIT=${LEGACY_CLEANUP_LIMIT:-10}
+          SERVER_MIN_REPLICAS=${SERVER_MIN_REPLICAS:-0}
+          SERVER_MAX_REPLICAS=${SERVER_MAX_REPLICAS:-10}
+          SERVER_HTTP_CONCURRENCY=${SERVER_HTTP_CONCURRENCY:-50}
+          CLIENT_MIN_REPLICAS=${CLIENT_MIN_REPLICAS:-0}
+          CLIENT_MAX_REPLICAS=${CLIENT_MAX_REPLICAS:-5}
+          CLIENT_HTTP_CONCURRENCY=${CLIENT_HTTP_CONCURRENCY:-80}
+          NGINX_MIN_REPLICAS=${NGINX_MIN_REPLICAS:-1}
+          NGINX_MAX_REPLICAS=${NGINX_MAX_REPLICAS:-5}
+          NGINX_HTTP_CONCURRENCY=${NGINX_HTTP_CONCURRENCY:-100}
 
-          if [ "$ACTIVE_COLOR" = "blue" ]; then
-            INACTIVE_COLOR="green"
-          else
-            INACTIVE_COLOR="blue"
-          fi
+          validate_nonnegative_int() {
+            name="$1"
+            value="$2"
+            max_value="$3"
 
-          echo "Current active slot : $ACTIVE_COLOR"
-          echo "Deploying to slot   : $INACTIVE_COLOR"
-
-          BLUE_SERVER_HOST="${SERVER_BASE}-blue.centralindia.azurecontainer.io"
-          GREEN_SERVER_HOST="${SERVER_BASE}-green.centralindia.azurecontainer.io"
-          BLUE_CLIENT_HOST="${CLIENT_BASE}-blue.centralindia.azurecontainer.io"
-          GREEN_CLIENT_HOST="${CLIENT_BASE}-green.centralindia.azurecontainer.io"
-
-          echo "Deploying new server image to ${SERVER_BASE}-${INACTIVE_COLOR} in background..."
-          (
-            az container delete --name "${SERVER_BASE}-${INACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || true
-            az container create --name "${SERVER_BASE}-${INACTIVE_COLOR}" --resource-group "$RG" --location centralindia --os-type Linux --image "$LOGIN_SERVER/server:${{ github.sha }}" --registry-login-server "$LOGIN_SERVER" --registry-username "$USERNAME" --registry-password "$PASSWORD" --dns-name-label "${SERVER_BASE}-${INACTIVE_COLOR}" --ports 8080 --environment-variables APP_VERSION="$INACTIVE_COLOR" PORT="8080" --cpu 0.5 --memory 1
-          ) &
-
-          echo "Deploying new client image to ${CLIENT_BASE}-${INACTIVE_COLOR} in background..."
-          (
-            az container delete --name "${CLIENT_BASE}-${INACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || true
-            az container create --name "${CLIENT_BASE}-${INACTIVE_COLOR}" --resource-group "$RG" --location centralindia --os-type Linux --image "$LOGIN_SERVER/client:${{ github.sha }}" --registry-login-server "$LOGIN_SERVER" --registry-username "$USERNAME" --registry-password "$PASSWORD" --dns-name-label "${CLIENT_BASE}-${INACTIVE_COLOR}" --ports 3000 --cpu 0.5 --memory 1
-          ) &
-
-          echo "Waiting for background deployments to hit Azure..."
-          wait
-
-          INACTIVE_SERVER_URL="http://${SERVER_BASE}-${INACTIVE_COLOR}.centralindia.azurecontainer.io:8080/api/version"
-          INACTIVE_CLIENT_URL="http://${CLIENT_BASE}-${INACTIVE_COLOR}.centralindia.azurecontainer.io:3000"
-
-          echo "Smoke testing backend: $INACTIVE_SERVER_URL"
-          echo "Smoke testing frontend: $INACTIVE_CLIENT_URL"
-
-          SMOKE_PASSED=false
-          for i in {1..12}; do
-            SERVER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$INACTIVE_SERVER_URL" --max-time 10 || echo "000")
-            CLIENT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$INACTIVE_CLIENT_URL" --max-time 10 || echo "000")
-
-            echo "  Attempt $i: Backend HTTP $SERVER_STATUS | Frontend HTTP $CLIENT_STATUS"
-
-            if [ "$SERVER_STATUS" = "200" ] && [ "$CLIENT_STATUS" = "200" ]; then
-              SMOKE_PASSED=true
-              break
+            if ! echo "$value" | grep -Eq '^[0-9]+$'; then
+              echo "::error::$name must be a whole number."
+              exit 1
             fi
-            sleep 10
-          done
 
-          if [ "$SMOKE_PASSED" != "true" ]; then
-            echo "::error::Smoke test FAILED on ${INACTIVE_COLOR} slot."
-            echo "Rollback initiated: Tearing down broken ${INACTIVE_COLOR} containers..."
+            if [ "$value" -gt "$max_value" ]; then
+              echo "::error::$name must be less than or equal to $max_value."
+              exit 1
+            fi
+          }
 
-            az container delete --name "${SERVER_BASE}-${INACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || true
-            az container delete --name "${CLIENT_BASE}-${INACTIVE_COLOR}" --resource-group "$RG" --yes 2>/dev/null || true
+          validate_positive_int() {
+            name="$1"
+            value="$2"
+            max_value="$3"
 
-            echo "Rollback complete. Active slot (${ACTIVE_COLOR}) unchanged and remains live."
+            validate_nonnegative_int "$name" "$value" "$max_value"
+
+            if [ "$value" -lt 1 ]; then
+              echo "::error::$name must be at least 1."
+              exit 1
+            fi
+          }
+
+          validate_nonnegative_int "SERVER_MIN_REPLICAS" "$SERVER_MIN_REPLICAS" 10
+          validate_positive_int "SERVER_MAX_REPLICAS" "$SERVER_MAX_REPLICAS" 30
+          validate_positive_int "SERVER_HTTP_CONCURRENCY" "$SERVER_HTTP_CONCURRENCY" 1000
+          validate_nonnegative_int "CLIENT_MIN_REPLICAS" "$CLIENT_MIN_REPLICAS" 10
+          validate_positive_int "CLIENT_MAX_REPLICAS" "$CLIENT_MAX_REPLICAS" 30
+          validate_positive_int "CLIENT_HTTP_CONCURRENCY" "$CLIENT_HTTP_CONCURRENCY" 1000
+          validate_nonnegative_int "NGINX_MIN_REPLICAS" "$NGINX_MIN_REPLICAS" 10
+          validate_positive_int "NGINX_MAX_REPLICAS" "$NGINX_MAX_REPLICAS" 30
+          validate_positive_int "NGINX_HTTP_CONCURRENCY" "$NGINX_HTTP_CONCURRENCY" 1000
+          validate_nonnegative_int "LEGACY_CLEANUP_LIMIT" "$LEGACY_CLEANUP_LIMIT" 50
+
+          if [ "$SERVER_MIN_REPLICAS" -gt "$SERVER_MAX_REPLICAS" ] \
+            || [ "$CLIENT_MIN_REPLICAS" -gt "$CLIENT_MAX_REPLICAS" ] \
+            || [ "$NGINX_MIN_REPLICAS" -gt "$NGINX_MAX_REPLICAS" ]; then
+            echo "::error::Each MIN_REPLICAS value must be less than or equal to its matching MAX_REPLICAS value."
             exit 1
           fi
 
-          echo "Smoke tests PASSED. Flipping NGINX from ${ACTIVE_COLOR} -> ${INACTIVE_COLOR} ..."
+          echo "Ensuring Azure Container Apps CLI support is available..."
+          az extension add --name containerapp --upgrade --only-show-errors
+          az provider register --namespace Microsoft.App --wait --only-show-errors
+          az provider register --namespace Microsoft.OperationalInsights --wait --only-show-errors
 
-          az container create \
-            --name "$NGINX_LABEL" \
-            --resource-group "$RG" \
-            --location centralindia \
-            --os-type Linux \
-            --image "$LOGIN_SERVER/nginx:${{ github.sha }}" \
-            --registry-login-server "$LOGIN_SERVER" \
-            --registry-username "$USERNAME" \
-            --registry-password "$PASSWORD" \
-            --dns-name-label "$NGINX_LABEL" \
-            --ports 80 \
-            --environment-variables \
-              ACTIVE_COLOR="$INACTIVE_COLOR" \
-              BLUE_SERVER_HOST="$BLUE_SERVER_HOST" \
-              GREEN_SERVER_HOST="$GREEN_SERVER_HOST" \
-              BLUE_CLIENT_HOST="$BLUE_CLIENT_HOST" \
-              GREEN_CLIENT_HOST="$GREEN_CLIENT_HOST" \
-              RESOLVER_IP="168.63.129.16" \
-            --cpu 0.25 --memory 0.5
+          ensure_container_app() {
+            app_name="$1"
+            image="$2"
+            target_port="$3"
+            min_replicas="$4"
+            max_replicas="$5"
+            http_concurrency="$6"
+            cpu="$7"
+            memory="$8"
+            shift 8
 
-          if [ "$ACTIVE_COLOR" != "blue" ] && [ "$ACTIVE_COLOR" != "green" ]; then
-            echo "Initial deployment detected. No old containers to teardown."
-          else
-            echo "Traffic successfully routed to ${INACTIVE_COLOR}."
-            echo "Tearing down old ${ACTIVE_COLOR} slot in the background..."
-            az container delete --name "${SERVER_BASE}-${ACTIVE_COLOR}" --resource-group "$RG" --yes --no-wait 2>/dev/null || true
-            az container delete --name "${CLIENT_BASE}-${ACTIVE_COLOR}" --resource-group "$RG" --yes --no-wait 2>/dev/null || true
-          fi
+            if az containerapp show --name "$app_name" --resource-group "$RG" --output none 2>/dev/null; then
+              echo "Updating Container App: $app_name"
+              az containerapp update \
+                --name "$app_name" \
+                --resource-group "$RG" \
+                --image "$image" \
+                --min-replicas "$min_replicas" \
+                --max-replicas "$max_replicas" \
+                --scale-rule-name http-scale \
+                --scale-rule-http-concurrency "$http_concurrency" \
+                --set-env-vars "$@" \
+                --output none
+            else
+              echo "Creating Container App: $app_name"
+              az containerapp create \
+                --name "$app_name" \
+                --resource-group "$RG" \
+                --environment "$ACA_ENV_NAME" \
+                --image "$image" \
+                --registry-server "$LOGIN_SERVER" \
+                --registry-username "$USERNAME" \
+                --registry-password "$PASSWORD" \
+                --target-port "$target_port" \
+                --ingress external \
+                --min-replicas "$min_replicas" \
+                --max-replicas "$max_replicas" \
+                --scale-rule-name http-scale \
+                --scale-rule-http-concurrency "$http_concurrency" \
+                --cpu "$cpu" \
+                --memory "$memory" \
+                --env-vars "$@" \
+                --output none
+            fi
+          }
 
-          echo "active_slot=$INACTIVE_COLOR" >> $GITHUB_OUTPUT
-          echo "public_url=http://$NGINX_LABEL.centralindia.azurecontainer.io" >> $GITHUB_OUTPUT
+          get_container_app_fqdn() {
+            az containerapp show \
+              --name "$1" \
+              --resource-group "$RG" \
+              --query "properties.configuration.ingress.fqdn" \
+              --output tsv
+          }
+
+          smoke_url() {
+            label="$1"
+            url="$2"
+            passed=false
+
+            for attempt in {1..18}; do
+              status=$(curl -s -o /dev/null -w "%{http_code}" "$url" --max-time 15 || true)
+              status=${status:-000}
+              echo "  ${label} attempt ${attempt}: HTTP $status - $url"
+
+              if [ "$status" = "200" ]; then
+                passed=true
+                break
+              fi
+
+              sleep 10
+            done
+
+            if [ "$passed" != "true" ]; then
+              echo "::error::$label smoke test failed for $url"
+              exit 1
+            fi
+          }
+
+          legacy_replica_name() {
+            base="$1"
+            color="$2"
+            index="$3"
+
+            if [ "$index" -eq 1 ]; then
+              echo "${base}-${color}"
+            else
+              echo "${base}-${color}-${index}"
+            fi
+          }
+
+          cleanup_legacy_aci() {
+            echo "Cleaning up legacy Azure Container Instances in the background..."
+            az container delete --name "$NGINX_LABEL" --resource-group "$RG" --yes --no-wait 2>/dev/null || true
+
+            for color in blue green; do
+              for index in $(seq 1 "$LEGACY_CLEANUP_LIMIT"); do
+                az container delete --name "$(legacy_replica_name "$SERVER_BASE" "$color" "$index")" --resource-group "$RG" --yes --no-wait 2>/dev/null || true
+                az container delete --name "$(legacy_replica_name "$CLIENT_BASE" "$color" "$index")" --resource-group "$RG" --yes --no-wait 2>/dev/null || true
+              done
+            done
+          }
+
+          echo "Container Apps environment : $ACA_ENV_NAME"
+          echo "Server autoscale          : min=$SERVER_MIN_REPLICAS max=$SERVER_MAX_REPLICAS concurrency=$SERVER_HTTP_CONCURRENCY"
+          echo "Client autoscale          : min=$CLIENT_MIN_REPLICAS max=$CLIENT_MAX_REPLICAS concurrency=$CLIENT_HTTP_CONCURRENCY"
+          echo "NGINX autoscale           : min=$NGINX_MIN_REPLICAS max=$NGINX_MAX_REPLICAS concurrency=$NGINX_HTTP_CONCURRENCY"
+
+          ensure_container_app \
+            "$SERVER_BASE" \
+            "$LOGIN_SERVER/server:${{ github.sha }}" \
+            8080 \
+            "$SERVER_MIN_REPLICAS" \
+            "$SERVER_MAX_REPLICAS" \
+            "$SERVER_HTTP_CONCURRENCY" \
+            0.5 \
+            1.0Gi \
+            APP_VERSION="${{ github.sha }}" \
+            PORT=8080
+
+          ensure_container_app \
+            "$CLIENT_BASE" \
+            "$LOGIN_SERVER/client:${{ github.sha }}" \
+            3000 \
+            "$CLIENT_MIN_REPLICAS" \
+            "$CLIENT_MAX_REPLICAS" \
+            "$CLIENT_HTTP_CONCURRENCY" \
+            0.5 \
+            1.0Gi \
+            PORT=3000
+
+          SERVER_FQDN=$(get_container_app_fqdn "$SERVER_BASE")
+          CLIENT_FQDN=$(get_container_app_fqdn "$CLIENT_BASE")
+
+          smoke_url "Backend Container App" "https://${SERVER_FQDN}/api/version"
+          smoke_url "Frontend Container App" "https://${CLIENT_FQDN}"
+
+          ensure_container_app \
+            "$NGINX_LABEL" \
+            "$LOGIN_SERVER/nginx:${{ github.sha }}" \
+            80 \
+            "$NGINX_MIN_REPLICAS" \
+            "$NGINX_MAX_REPLICAS" \
+            "$NGINX_HTTP_CONCURRENCY" \
+            0.25 \
+            0.5Gi \
+            PLATFORM=azure-container-apps \
+            RESOLVER_IP=168.63.129.16 \
+            BACKEND_UPSTREAM_URL="https://${SERVER_FQDN}" \
+            CLIENT_UPSTREAM_URL="https://${CLIENT_FQDN}"
+
+          NGINX_FQDN=$(get_container_app_fqdn "$NGINX_LABEL")
+          smoke_url "NGINX Gateway Container App" "https://${NGINX_FQDN}/health"
+
+          cleanup_legacy_aci
+
+          echo "public_url=https://${NGINX_FQDN}" >> $GITHUB_OUTPUT
+          echo "server_scale=${SERVER_MIN_REPLICAS}-${SERVER_MAX_REPLICAS}" >> $GITHUB_OUTPUT
+          echo "client_scale=${CLIENT_MIN_REPLICAS}-${CLIENT_MAX_REPLICAS}" >> $GITHUB_OUTPUT
+          echo "nginx_scale=${NGINX_MIN_REPLICAS}-${NGINX_MAX_REPLICAS}" >> $GITHUB_OUTPUT
 
           echo ""
           echo "Deployment complete."
-          echo "  Active slot : $INACTIVE_COLOR"
-          echo "  Public URL  : http://$NGINX_LABEL.centralindia.azurecontainer.io"
+          echo "  Public URL      : https://${NGINX_FQDN}"
+          echo "  Server scale    : ${SERVER_MIN_REPLICAS}-${SERVER_MAX_REPLICAS}"
+          echo "  Client scale    : ${CLIENT_MIN_REPLICAS}-${CLIENT_MAX_REPLICAS}"
+          echo "  NGINX scale     : ${NGINX_MIN_REPLICAS}-${NGINX_MAX_REPLICAS}"
 
       - name: Deployment Success Notification
         if: success()
@@ -564,7 +693,7 @@ jobs:
             exit 0
           fi
 
-          MESSAGE="\u2705 **Deployment Successful**\n\n**Commit:** \`${{ github.sha }}\`\n**Duration:** \`${DURATION} seconds\`\n**Active Slot:** \`${{ steps.deploy.outputs.active_slot }}\`\n**URL:** ${{ steps.deploy.outputs.public_url }}"
+          MESSAGE="\u2705 **Deployment Successful**\n\n**Commit:** \`${{ github.sha }}\`\n**Duration:** \`${DURATION} seconds\`\n**Server Scale:** \`${{ steps.deploy.outputs.server_scale }}\`\n**Client Scale:** \`${{ steps.deploy.outputs.client_scale }}\`\n**NGINX Scale:** \`${{ steps.deploy.outputs.nginx_scale }}\`\n**URL:** ${{ steps.deploy.outputs.public_url }}"
 
           curl -H "Content-Type: application/json" \
                -d "{\"content\": \"$MESSAGE\", \"text\": \"$MESSAGE\"}" \

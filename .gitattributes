@@ -1,0 +1,7 @@
+*.conf text eol=lf
+*.md text eol=lf
+*.tf text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+nginx/docker-entrypoint.sh text eol=lf
