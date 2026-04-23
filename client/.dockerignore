@@ -1,6 +1,10 @@
 node_modules
+.next
+out
+coverage
 .git
 .gitignore
 npm-debug.log
+jest_error.txt
 .env
 .env.local

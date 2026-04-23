@@ -1,12 +1,7 @@
-node_modules/
-server/node_modules/
-
-
-
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -17,10 +12,17 @@ server/node_modules/
 
 # testing
 /coverage
+coverage/
+jest_error.txt
+
+# local monitoring snapshots
+/cpu_metrics.json
+/targets.json
+/targets2.json
 
 # next.js
-/.next/
-/out/
+.next/
+out/
 
 # production
 /build
