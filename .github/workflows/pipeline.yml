@@ -326,40 +326,26 @@ jobs:
           blue\"\nfi\n\nif [ \"$ACTIVE_COLOR\" = \"blue\" ]; then\n  INACTIVE_COLOR=\"\
           green\"\nelse\n  INACTIVE_COLOR=\"blue\"\nfi\n\necho \"Current active slot\
           \ : $ACTIVE_COLOR\"\necho \"Deploying to slot   : $INACTIVE_COLOR\"\n\n\
-          BLUE_SERVER_HOST=\"${SERVER_BASE}-blue.centralindia.azurecontainer.io\"\n\
-          GREEN_SERVER_HOST=\"${SERVER_BASE}-green.centralindia.azurecontainer.io\"\
+          BLUE_SERVER_HOST=\"${SERVER_BASE}-blue.centralindia.azurecontainer.io\"\
+          \nGREEN_SERVER_HOST=\"${SERVER_BASE}-green.centralindia.azurecontainer.io\"\
           \nBLUE_CLIENT_HOST=\"${CLIENT_BASE}-blue.centralindia.azurecontainer.io\"\
           \nGREEN_CLIENT_HOST=\"${CLIENT_BASE}-green.centralindia.azurecontainer.io\"\
-          \n\necho \"Deploying new server image to ${SERVER_BASE}-${INACTIVE_COLOR}\
-          \ ...\"\naz container delete \\\n  --name \"${SERVER_BASE}-${INACTIVE_COLOR}\"\
-          \ \\\n  --resource-group \"$RG\" \\\n  --yes 2>/dev/null || true\n\naz container\
-          \ create \\\n  --name \"${SERVER_BASE}-${INACTIVE_COLOR}\" \\\n  --resource-group\
-          \ \"$RG\" \\\n  --location centralindia \\\n  --os-type Linux \\\n  --image\
-          \ \"$LOGIN_SERVER/server:${{ github.sha }}\" \\\n  --registry-login-server\
-          \ \"$LOGIN_SERVER\" \\\n  --registry-username \"$USERNAME\" \\\n  --registry-password\
-          \ \"$PASSWORD\" \\\n  --dns-name-label \"${SERVER_BASE}-${INACTIVE_COLOR}\"\
-          \ \\\n  --ports 8080 \\\n  --environment-variables APP_VERSION=\"$INACTIVE_COLOR\"\
-          \ PORT=\"8080\" \\\n  --cpu 0.5 --memory 1\n\necho \"Deploying new client\
-          \ image to ${CLIENT_BASE}-${INACTIVE_COLOR} ...\"\naz container delete \\\
-          \n  --name \"${CLIENT_BASE}-${INACTIVE_COLOR}\" \\\n  --resource-group \"\
-          $RG\" \\\n  --yes 2>/dev/null || true\n\naz container create \\\n  --name\
-          \ \"${CLIENT_BASE}-${INACTIVE_COLOR}\" \\\n  --resource-group \"$RG\" \\\
-          \n  --location centralindia \\\n  --os-type Linux \\\n  --image \"$LOGIN_SERVER/client:${{\
-          \ github.sha }}\" \\\n  --registry-login-server \"$LOGIN_SERVER\" \\\n \
-          \ --registry-username \"$USERNAME\" \\\n  --registry-password \"$PASSWORD\"\
-          \ \\\n  --dns-name-label \"${CLIENT_BASE}-${INACTIVE_COLOR}\" \\\n  --ports\
-          \ 3000 \\\n  --cpu 0.5 --memory 1\n\necho \"Waiting 45s for ${INACTIVE_COLOR}\
-          \ slot to start...\"\nsleep 45\n\nINACTIVE_SERVER_URL=\"http://${SERVER_BASE}-${INACTIVE_COLOR}.centralindia.azurecontainer.io:8080/api/version\"\
+          \n\necho \"Deploying new server image to ${SERVER_BASE}-${INACTIVE_COLOR} in background...\"\n( \
+          az container delete --name \"${SERVER_BASE}-${INACTIVE_COLOR}\" --resource-group \"$RG\" --yes 2>/dev/null || true \
+          az container create --name \"${SERVER_BASE}-${INACTIVE_COLOR}\" --resource-group \"$RG\" --location centralindia --os-type Linux --image \"$LOGIN_SERVER/server:${{ github.sha }}\" --registry-login-server \"$LOGIN_SERVER\" --registry-username \"$USERNAME\" --registry-password \"$PASSWORD\" --dns-name-label \"${SERVER_BASE}-${INACTIVE_COLOR}\" --ports 8080 --environment-variables APP_VERSION=\"$INACTIVE_COLOR\" PORT=\"8080\" --cpu 0.5 --memory 1 \
+          ) &\n\necho \"Deploying new client image to ${CLIENT_BASE}-${INACTIVE_COLOR} in background...\"\n( \
+          az container delete --name \"${CLIENT_BASE}-${INACTIVE_COLOR}\" --resource-group \"$RG\" --yes 2>/dev/null || true \
+          az container create --name \"${CLIENT_BASE}-${INACTIVE_COLOR}\" --resource-group \"$RG\" --location centralindia --os-type Linux --image \"$LOGIN_SERVER/client:${{ github.sha }}\" --registry-login-server \"$LOGIN_SERVER\" --registry-username \"$USERNAME\" --registry-password \"$PASSWORD\" --dns-name-label \"${CLIENT_BASE}-${INACTIVE_COLOR}\" --ports 3000 --cpu 0.5 --memory 1 \
+          ) &\n\necho \"Waiting for background deployments to hit Azure...\"\nwait\n\nINACTIVE_SERVER_URL=\"http://${SERVER_BASE}-${INACTIVE_COLOR}.centralindia.azurecontainer.io:8080/api/version\"\
           \nINACTIVE_CLIENT_URL=\"http://${CLIENT_BASE}-${INACTIVE_COLOR}.centralindia.azurecontainer.io:3000\"\
           \n\necho \"Smoke testing backend: $INACTIVE_SERVER_URL\"\necho \"Smoke testing\
-          \ frontend: $INACTIVE_CLIENT_URL\"\n\nSMOKE_PASSED=false\nfor i in 1 2 3\
-          \ 4 5; do\n  SERVER_STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"\
+          \ frontend: $INACTIVE_CLIENT_URL\"\n\nSMOKE_PASSED=false\nfor i in {1..12}; do\n  SERVER_STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"\
           $INACTIVE_SERVER_URL\" --max-time 10 || echo \"000\")\n  CLIENT_STATUS=$(curl\
           \ -s -o /dev/null -w \"%{http_code}\" \"$INACTIVE_CLIENT_URL\" --max-time\
           \ 10 || echo \"000\")\n\n  echo \"  Attempt $i: Backend HTTP $SERVER_STATUS\
           \ | Frontend HTTP $CLIENT_STATUS\"\n\n  if [ \"$SERVER_STATUS\" = \"200\"\
           \ ] && [ \"$CLIENT_STATUS\" = \"200\" ]; then\n    SMOKE_PASSED=true\n \
-          \   break\n  fi\n  sleep 15\ndone\n\nif [ \"$SMOKE_PASSED\" != \"true\"\
+          \   break\n  fi\n  sleep 10\ndone\n\nif [ \"$SMOKE_PASSED\" != \"true\"\
           \ ]; then\n  echo \"::error::Smoke test FAILED on ${INACTIVE_COLOR} slot.\"\
           \n  echo \"Rollback initiated: Tearing down broken ${INACTIVE_COLOR} containers...\"\
           \n\n  az container delete --name \"${SERVER_BASE}-${INACTIVE_COLOR}\" --resource-group\
@@ -379,12 +365,7 @@ jobs:
           168.63.129.16\" \\\n  --cpu 0.25 --memory 0.5\n\nif [ \"$ACTIVE_COLOR\"\
           \ != \"blue\" ] && [ \"$ACTIVE_COLOR\" != \"green\" ]; then\n  echo \"Initial\
           \ deployment detected. No old containers to teardown.\"\nelse\n  echo \"\
-          Traffic successfully routed to ${INACTIVE_COLOR}.\"\n  echo \"Tearing down\
-          \ old ${ACTIVE_COLOR} slot to save Azure costs...\"\n  az container delete\
-          \ --name \"${SERVER_BASE}-${ACTIVE_COLOR}\" --resource-group \"$RG\" --yes\
-          \ 2>/dev/null || echo \"Server delete skipped/failed\"\n  az container delete\
-          \ --name \"${CLIENT_BASE}-${ACTIVE_COLOR}\" --resource-group \"$RG\" --yes\
-          \ 2>/dev/null || echo \"Client delete skipped/failed\"\nfi\n\necho \"active_slot=$INACTIVE_COLOR\"\
+          Traffic successfully routed to ${INACTIVE_COLOR}.\"\n  echo \"Tearing down old ${ACTIVE_COLOR} slot in the background...\"\n  az container delete --name \"${SERVER_BASE}-${ACTIVE_COLOR}\" --resource-group \"$RG\" --yes --no-wait 2>/dev/null || true\n  az container delete --name \"${CLIENT_BASE}-${ACTIVE_COLOR}\" --resource-group \"$RG\" --yes --no-wait 2>/dev/null || true\nfi\n\necho \"active_slot=$INACTIVE_COLOR\"\
           \ >> $GITHUB_OUTPUT\necho \"public_url=http://$NGINX_LABEL.centralindia.azurecontainer.io\"\
           \ >> $GITHUB_OUTPUT\n\necho \"\"\necho \"Deployment complete.\"\necho \"\
           \  Active slot : $INACTIVE_COLOR\"\necho \"  Public URL  : http://$NGINX_LABEL.centralindia.azurecontainer.io\"\
