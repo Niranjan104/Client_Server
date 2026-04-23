@@ -1,0 +1,445 @@
+name: Unified Enterprise Pipeline
+'on':
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: null
+permissions:
+  id-token: write
+  contents: read
+  security-events: write
+  actions: read
+jobs:
+  validate:
+    name: Build & Lint (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app:
+          - client
+          - server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+      - name: Install Dependencies
+        working-directory: ${{ matrix.app }}
+        run: npm ci
+      - name: Lint
+        working-directory: ${{ matrix.app }}
+        run: npm run lint
+      - name: Test
+        working-directory: ${{ matrix.app }}
+        run: npm test -- --ci
+      - name: Build (client only)
+        if: matrix.app == 'client'
+        working-directory: client
+        run: npm run build
+  sca-npm-audit:
+    name: "SCA \u2014 npm audit"
+    runs-on: ubuntu-latest
+    needs: validate
+    strategy:
+      matrix:
+        app:
+          - client
+          - server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+      - name: Install Dependencies
+        working-directory: ${{ matrix.app }}
+        run: npm ci
+      - name: npm audit (SCA)
+        working-directory: ${{ matrix.app }}
+        run: npm audit --audit-level=critical
+  sast-semgrep:
+    name: "SAST \u2014 Semgrep"
+    runs-on: ubuntu-latest
+    needs: validate
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Semgrep OWASP + Security Scan
+        run: "semgrep ci \\\n  --config=p/owasp-top-ten \\\n  --config=p/javascript\
+          \ \\\n  --config=p/typescript \\\n  --config=p/nodejs \\\n  --exclude-rule\
+          \ generic.nginx.security.dynamic-proxy-host.dynamic-proxy-host \\\n  --exclude-rule\
+          \ generic.nginx.security.request-host-used.request-host-used\n"
+        env:
+          SEMGREP_SEND_METRICS: 'off'
+  sast-codeql:
+    name: "SAST \u2014 CodeQL"
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:javascript
+  sca-trivy:
+    name: "SCA \u2014 Trivy Image Scan (${{ matrix.image }})"
+    runs-on: ubuntu-latest
+    needs: validate
+    strategy:
+      matrix:
+        include:
+          - image: client
+            context: ./client
+          - image: server
+            context: ./server
+          - image: nginx
+            context: ./nginx
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker Image for Scan
+        run: "docker build \\\n  --build-arg NEXT_PUBLIC_API_URL=http://localhost/api\
+          \ \\\n  -t scan-target-${{ matrix.image }}:latest \\\n  ${{ matrix.context\
+          \ }}\n"
+      - name: Trivy Container Scan
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          image-ref: scan-target-${{ matrix.image }}:latest
+          format: sarif
+          output: trivy-${{ matrix.image }}.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+      - name: Upload Trivy SARIF to GitHub Security Tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.image }}.sarif
+  infrastructure:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infra
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Create Terraform State Storage (Bootstrapping)
+        run: "RG_NAME=$(echo \"${{ secrets.ACI_RESOURCE_GROUP }}\" | tr -d '\\r\\\
+          n')\nLOCATION=\"centralindia\"\nSTORAGE_ACCOUNT_NAME=\"tfstate$(date +%s%N\
+          \ | cut -c1-6)\"\nCONTAINER_NAME=\"tfstate\"\n\n# 1. Establish absolute\
+          \ Subscription Context\nexport SUB_ID=$(echo '${{ secrets.AZURE_CREDENTIALS\
+          \ }}' | jq -r .subscriptionId | tr -d '\\r\\n')\naz account set --subscription\
+          \ \"$SUB_ID\"\n\n# 2. Register required resource providers (resolves false-positive\
+          \ SubscriptionNotFound errors)\necho \"Ensuring required Azure Resource\
+          \ Providers are registered...\"\naz provider register --namespace Microsoft.Storage\n\
+          az provider register --namespace Microsoft.ContainerInstance\n\n# 3. Wait\
+          \ up to 60 seconds if Role Assignment hasn't propagated yet\nSUCCESS=false\n\
+          for i in 1 2 3 4 5; do\n  echo \"Attempt $i: Connecting to Subscription\
+          \ $SUB_ID...\"\n  az group create --name \"$RG_NAME\" --location \"$LOCATION\"\
+          \ --output none && SUCCESS=true && break\n  echo \"Waiting 15s for new Service\
+          \ Principal role propagation...\"\n  sleep 15\ndone\n\nif [ \"$SUCCESS\"\
+          \ != \"true\" ]; then\n  echo \"::error::Failed to access Subscription $SUB_ID.\
+          \ The Service Principal Role Assignment has not propagated yet, or was created\
+          \ incorrectly.\"\n  exit 1\nfi\n\n# Check if storage account already exists\
+          \ in this RG\nEXISTING_SA=$(az storage account list -g \"$RG_NAME\" --query\
+          \ \"[?starts_with(name, 'tfstate')].name\" -o tsv | head -n 1 | tr -d '\\\
+          r\\n')\n\nif [ -z \"$EXISTING_SA\" ]; then\n  echo \"Creating new Storage\
+          \ Account: $STORAGE_ACCOUNT_NAME for Terraform State...\"\n  az storage\
+          \ account create --resource-group \"$RG_NAME\" --name \"$STORAGE_ACCOUNT_NAME\"\
+          \ --sku Standard_LRS --encryption-services blob --min-tls-version TLS1_2\
+          \ --output none\n  az storage container create --account-name \"$STORAGE_ACCOUNT_NAME\"\
+          \ --name \"$CONTAINER_NAME\" --auth-mode login --output none\n  \n  echo\
+          \ \"TF_STATE_ACCOUNT=$STORAGE_ACCOUNT_NAME\" >> $GITHUB_ENV\nelse\n  echo\
+          \ \"Using existing Storage Account: $EXISTING_SA for Terraform State...\"\
+          \n  echo \"TF_STATE_ACCOUNT=$EXISTING_SA\" >> $GITHUB_ENV\nfi\n"
+      - name: Export ARM Credentials for Terraform
+        run: 'echo "ARM_CLIENT_ID=$(echo ''${{ secrets.AZURE_CREDENTIALS }}'' | jq
+          -r .clientId | tr -d ''\r\n'')" >> $GITHUB_ENV
+
+          echo "ARM_CLIENT_SECRET=$(echo ''${{ secrets.AZURE_CREDENTIALS }}'' | jq
+          -r .clientSecret | tr -d ''\r\n'')" >> $GITHUB_ENV
+
+          echo "ARM_SUBSCRIPTION_ID=$(echo ''${{ secrets.AZURE_CREDENTIALS }}'' |
+          jq -r .subscriptionId | tr -d ''\r\n'')" >> $GITHUB_ENV
+
+          echo "ARM_TENANT_ID=$(echo ''${{ secrets.AZURE_CREDENTIALS }}'' | jq -r
+          .tenantId | tr -d ''\r\n'')" >> $GITHUB_ENV
+
+          '
+      - name: Resolve ACR Name
+        run: "ACR_NAME=$(echo '${{ secrets.ACR_NAME }}' | tr -d '\\r\\n')\n\nif [\
+          \ -z \"$ACR_NAME\" ]; then\n  echo \"::error::ACR_NAME secret is missing.\"\
+          \n  exit 1\nfi\n\nif ! echo \"$ACR_NAME\" | grep -Eq '^[a-z0-9]{5,50}$';\
+          \ then\n  echo \"::error::ACR_NAME '$ACR_NAME' is invalid. Use 5-50 lowercase\
+          \ alphanumeric characters.\"\n  exit 1\nfi\n\necho \"ACR_NAME=$ACR_NAME\"\
+          \ >> $GITHUB_ENV\n"
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+      - name: Terraform Init
+        run: "RG_NAME=$(echo '${{ secrets.ACI_RESOURCE_GROUP }}' | tr -d '\\r\\n')\n\
+          \n# Force break any stuck Terraform state lease from previously cancelled\
+          \ runs!\necho \"Force unlocking Terraform state blob from dead runs...\"\
+          \naz storage blob lease break --blob-name teastall.terraform.tfstate --container-name\
+          \ tfstate --account-name $TF_STATE_ACCOUNT --auth-mode login || true\n\n\
+          terraform init \\\n  -backend-config=\"resource_group_name=$RG_NAME\" \\\
+          \n  -backend-config=\"storage_account_name=$TF_STATE_ACCOUNT\" \\\n  -backend-config=\"\
+          container_name=tfstate\" \\\n  -backend-config=\"key=teastall.terraform.tfstate\"\
+          \n"
+      - name: Bootstrap ACR if Missing
+        run: "RG_NAME=$(echo '${{ secrets.ACI_RESOURCE_GROUP }}' | tr -d '\\r\\n')\n\
+          SERVER_NAME=$(echo '${{ secrets.SERVER_BASE_NAME }}' | tr -d '\\r\\n')\n\
+          CLIENT_NAME=$(echo '${{ secrets.CLIENT_BASE_NAME }}' | tr -d '\\r\\n')\n\
+          \nif az acr show --name \"$ACR_NAME\" --query \"name\" --output tsv >/dev/null\
+          \ 2>&1; then\n  echo \"ACR '$ACR_NAME' already exists. Skipping bootstrap.\"\
+          \n  exit 0\nfi\n\necho \"ACR '$ACR_NAME' not found. Creating it via targeted\
+          \ Terraform apply...\"\nterraform apply -auto-approve \\\n  -target=azurerm_container_registry.acr\
+          \ \\\n  -var=\"resource_group_name=$RG_NAME\" \\\n  -var=\"acr_name=$ACR_NAME\"\
+          \ \\\n  -var=\"acr_username=bootstrap\" \\\n  -var=\"acr_password=bootstrap\"\
+          \ \\\n  -var=\"server_name=$SERVER_NAME\" \\\n  -var=\"client_name=$CLIENT_NAME\"\
+          \ \\\n  -var=\"tf_state_storage_account=$TF_STATE_ACCOUNT\" \\\n  -var=\"\
+          active_color=blue\" \\\n  -var=\"blue_image_tag=initial\" \\\n  -var=\"\
+          green_image_tag=initial\" \\\n  -var=\"arm_client_id=$ARM_CLIENT_ID\" \\\
+          \n  -var=\"arm_client_secret=$ARM_CLIENT_SECRET\" \\\n  -var=\"arm_tenant_id=$ARM_TENANT_ID\"\
+          \ \\\n  -var=\"arm_subscription_id=$ARM_SUBSCRIPTION_ID\"\n"
+      - name: Resolve ACR Credentials
+        run: "az acr update --name \"$ACR_NAME\" --admin-enabled true --output none\n\
+          ACR_USERNAME=$(az acr credential show --name \"$ACR_NAME\" --query \"username\"\
+          \ -o tsv | tr -d '\\r\\n')\nACR_PASSWORD=$(az acr credential show --name\
+          \ \"$ACR_NAME\" --query \"passwords[0].value\" -o tsv | tr -d '\\r\\n')\n\
+          \nif [ -z \"$ACR_USERNAME\" ] || [ -z \"$ACR_PASSWORD\" ]; then\n  echo\
+          \ \"::error::Failed to fetch ACR credentials from Azure.\"\n  exit 1\nfi\n\
+          \necho \"ACR_USERNAME_RUNTIME=$ACR_USERNAME\" >> $GITHUB_ENV\necho \"ACR_PASSWORD_RUNTIME=$ACR_PASSWORD\"\
+          \ >> $GITHUB_ENV\n"
+      - name: Terraform Plan
+        id: plan
+        run: "RG_NAME=$(echo '${{ secrets.ACI_RESOURCE_GROUP }}' | tr -d '\\r\\n')\n\
+          ACR_USERNAME=$(echo \"$ACR_USERNAME_RUNTIME\" | tr -d '\\r\\n')\nACR_PASSWORD=$(echo\
+          \ \"$ACR_PASSWORD_RUNTIME\" | tr -d '\\r\\n')\nSERVER_NAME=$(echo '${{ secrets.SERVER_BASE_NAME\
+          \ }}' | tr -d '\\r\\n')\nCLIENT_NAME=$(echo '${{ secrets.CLIENT_BASE_NAME\
+          \ }}' | tr -d '\\r\\n')\n\n# To break the cyclic dependency between Terraform\
+          \ building the registry and the CD pipeline\n# pushing the images, we dynamically\
+          \ check if the ACR actually has our images yet.\n# If it doesn't, we instruct\
+          \ Terraform to use public placeholder images (\"initial\" tag).\nif az acr\
+          \ repository show --name \"$ACR_NAME\" --image server:latest &> /dev/null;\
+          \ then\n  echo \"Custom images found in registry. Deploying latest application\
+          \ builds.\"\n  IMAGE_TAG=\"latest\"\nelse\n  echo \"Registry is empty (First\
+          \ Run). Deploying public placeholder images.\"\n  IMAGE_TAG=\"initial\"\n\
+          fi\n\nterraform plan \\\n  -var=\"resource_group_name=$RG_NAME\" \\\n  -var=\"\
+          acr_name=$ACR_NAME\" \\\n  -var=\"acr_username=$ACR_USERNAME\" \\\n  -var=\"\
+          acr_password=$ACR_PASSWORD\" \\\n  -var=\"server_name=$SERVER_NAME\" \\\n\
+          \  -var=\"client_name=$CLIENT_NAME\" \\\n  -var=\"tf_state_storage_account=$TF_STATE_ACCOUNT\"\
+          \ \\\n  -var=\"active_color=blue\" \\\n  -var=\"blue_image_tag=$IMAGE_TAG\"\
+          \ \\\n  -var=\"green_image_tag=$IMAGE_TAG\" \\\n  -var=\"arm_client_id=$ARM_CLIENT_ID\"\
+          \ \\\n  -var=\"arm_client_secret=$ARM_CLIENT_SECRET\" \\\n  -var=\"arm_tenant_id=$ARM_TENANT_ID\"\
+          \ \\\n  -var=\"arm_subscription_id=$ARM_SUBSCRIPTION_ID\" \\\n  -out=tfplan\n"
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+  delivery:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record Deployment Start Time
+        run: echo "DEPLOY_START_TIME=$(date +%s)" >> $GITHUB_ENV
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Resolve ACR Credentials
+        id: acr
+        run: "ACR_NAME=$(echo \"${{ secrets.ACR_NAME }}\" | tr -d '\\r\\n')\n\nif\
+          \ [ -z \"$ACR_NAME\" ]; then\n  echo \"::error::ACR_NAME secret is missing.\"\
+          \n  exit 1\nfi\n\nif ! echo \"$ACR_NAME\" | grep -Eq '^[a-z0-9]{5,50}$';\
+          \ then\n  echo \"::error::ACR_NAME '$ACR_NAME' is invalid. Use 5-50 lowercase\
+          \ alphanumeric characters.\"\n  exit 1\nfi\n\nCLEAN_LOGIN_SERVER=$(az acr\
+          \ show --name \"$ACR_NAME\" --query \"loginServer\" -o tsv | tr -d '\\r\\\
+          n')\nif [ -z \"$CLEAN_LOGIN_SERVER\" ]; then\n  echo \"::error::Could not\
+          \ resolve ACR login server from Azure for registry '$ACR_NAME'.\"\n  exit\
+          \ 1\nfi\n\naz acr update --name \"$ACR_NAME\" --admin-enabled true --output\
+          \ none\nACR_USERNAME=$(az acr credential show --name \"$ACR_NAME\" --query\
+          \ \"username\" -o tsv | tr -d '\\r\\n')\nACR_PASSWORD=$(az acr credential\
+          \ show --name \"$ACR_NAME\" --query \"passwords[0].value\" -o tsv | tr -d\
+          \ '\\r\\n')\n\nif [ -z \"$ACR_USERNAME\" ] || [ -z \"$ACR_PASSWORD\" ];\
+          \ then\n  echo \"::error::Could not resolve ACR credentials. Ensure admin\
+          \ user is enabled on ACR.\"\n  exit 1\nfi\n\necho \"login_server=$CLEAN_LOGIN_SERVER\"\
+          \ >> $GITHUB_OUTPUT\necho \"username=$ACR_USERNAME\" >> $GITHUB_OUTPUT\n\
+          echo \"password=$ACR_PASSWORD\" >> $GITHUB_OUTPUT\n"
+      - name: Log in to ACR for Docker Push
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.acr.outputs.login_server }}
+          username: ${{ steps.acr.outputs.username }}
+          password: ${{ steps.acr.outputs.password }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and Push Server Image
+        run: "docker buildx build --push \\\n  --cache-from type=gha,scope=server\
+          \ \\\n  --cache-to type=gha,mode=max,scope=server \\\n  -t ${{ steps.acr.outputs.login_server\
+          \ }}/server:${{ github.sha }} \\\n  -t ${{ steps.acr.outputs.login_server\
+          \ }}/server:latest \\\n  ./server\n"
+      - name: Build and Push Client Image
+        run: "NGINX_LABEL=$(echo \"${{ secrets.NGINX_DNS_LABEL }}\" | tr -d '\\r\\\
+          n')\n\ndocker buildx build --push \\\n  --cache-from type=gha,scope=client\
+          \ \\\n  --cache-to type=gha,mode=max,scope=client \\\n  --build-arg NEXT_PUBLIC_API_URL=\"\
+          http://${NGINX_LABEL}.centralindia.azurecontainer.io/api\" \\\n  -t ${{\
+          \ steps.acr.outputs.login_server }}/client:${{ github.sha }} \\\n  -t ${{\
+          \ steps.acr.outputs.login_server }}/client:latest \\\n  ./client\n"
+      - name: Build and Push NGINX Image
+        run: "docker buildx build --push \\\n  --cache-from type=gha,scope=nginx \\\
+          \n  --cache-to type=gha,mode=max,scope=nginx \\\n  -t ${{ steps.acr.outputs.login_server\
+          \ }}/nginx:${{ github.sha }} \\\n  -t ${{ steps.acr.outputs.login_server\
+          \ }}/nginx:latest \\\n  ./nginx\n"
+      - name: Deploy to Inactive Slot and Flip Traffic
+        id: deploy
+        run: "RG=$(echo \"${{ secrets.ACI_RESOURCE_GROUP }}\" | tr -d '\\r\\n')\n\
+          LOGIN_SERVER=$(echo \"${{ steps.acr.outputs.login_server }}\" | tr -d '\\\
+          r\\n')\nUSERNAME=$(echo \"${{ steps.acr.outputs.username }}\" | tr -d '\\\
+          r\\n')\nPASSWORD=$(echo \"${{ steps.acr.outputs.password }}\" | tr -d '\\\
+          r\\n')\nNGINX_LABEL=$(echo \"${{ secrets.NGINX_DNS_LABEL }}\" | tr -d '\\\
+          r\\n')\nSERVER_BASE=$(echo \"${{ secrets.SERVER_BASE_NAME }}\" | tr -d '\\\
+          r\\n')\nCLIENT_BASE=$(echo \"${{ secrets.CLIENT_BASE_NAME }}\" | tr -d '\\\
+          r\\n')\n\nACTIVE_COLOR=$(az container show \\\n  --name \"$NGINX_LABEL\"\
+          \ \\\n  --resource-group \"$RG\" \\\n  --query \"containers[0].environmentVariables[?name=='ACTIVE_COLOR'].value\
+          \ | [0]\" \\\n  --output tsv 2>/dev/null || echo \"blue\")\n\nif [ -z \"\
+          $ACTIVE_COLOR\" ] || [ \"$ACTIVE_COLOR\" = \"None\" ]; then\n  ACTIVE_COLOR=\"\
+          blue\"\nfi\n\nif [ \"$ACTIVE_COLOR\" = \"blue\" ]; then\n  INACTIVE_COLOR=\"\
+          green\"\nelse\n  INACTIVE_COLOR=\"blue\"\nfi\n\necho \"Current active slot\
+          \ : $ACTIVE_COLOR\"\necho \"Deploying to slot   : $INACTIVE_COLOR\"\n\n\
+          BLUE_SERVER_HOST=\"${SERVER_BASE}-blue.centralindia.azurecontainer.io\"\n\
+          GREEN_SERVER_HOST=\"${SERVER_BASE}-green.centralindia.azurecontainer.io\"\
+          \nBLUE_CLIENT_HOST=\"${CLIENT_BASE}-blue.centralindia.azurecontainer.io\"\
+          \nGREEN_CLIENT_HOST=\"${CLIENT_BASE}-green.centralindia.azurecontainer.io\"\
+          \n\necho \"Deploying new server image to ${SERVER_BASE}-${INACTIVE_COLOR}\
+          \ ...\"\naz container delete \\\n  --name \"${SERVER_BASE}-${INACTIVE_COLOR}\"\
+          \ \\\n  --resource-group \"$RG\" \\\n  --yes 2>/dev/null || true\n\naz container\
+          \ create \\\n  --name \"${SERVER_BASE}-${INACTIVE_COLOR}\" \\\n  --resource-group\
+          \ \"$RG\" \\\n  --location centralindia \\\n  --os-type Linux \\\n  --image\
+          \ \"$LOGIN_SERVER/server:${{ github.sha }}\" \\\n  --registry-login-server\
+          \ \"$LOGIN_SERVER\" \\\n  --registry-username \"$USERNAME\" \\\n  --registry-password\
+          \ \"$PASSWORD\" \\\n  --dns-name-label \"${SERVER_BASE}-${INACTIVE_COLOR}\"\
+          \ \\\n  --ports 8080 \\\n  --environment-variables APP_VERSION=\"$INACTIVE_COLOR\"\
+          \ PORT=\"8080\" \\\n  --cpu 0.5 --memory 1\n\necho \"Deploying new client\
+          \ image to ${CLIENT_BASE}-${INACTIVE_COLOR} ...\"\naz container delete \\\
+          \n  --name \"${CLIENT_BASE}-${INACTIVE_COLOR}\" \\\n  --resource-group \"\
+          $RG\" \\\n  --yes 2>/dev/null || true\n\naz container create \\\n  --name\
+          \ \"${CLIENT_BASE}-${INACTIVE_COLOR}\" \\\n  --resource-group \"$RG\" \\\
+          \n  --location centralindia \\\n  --os-type Linux \\\n  --image \"$LOGIN_SERVER/client:${{\
+          \ github.sha }}\" \\\n  --registry-login-server \"$LOGIN_SERVER\" \\\n \
+          \ --registry-username \"$USERNAME\" \\\n  --registry-password \"$PASSWORD\"\
+          \ \\\n  --dns-name-label \"${CLIENT_BASE}-${INACTIVE_COLOR}\" \\\n  --ports\
+          \ 3000 \\\n  --cpu 0.5 --memory 1\n\necho \"Waiting 45s for ${INACTIVE_COLOR}\
+          \ slot to start...\"\nsleep 45\n\nINACTIVE_SERVER_URL=\"http://${SERVER_BASE}-${INACTIVE_COLOR}.centralindia.azurecontainer.io:8080/api/version\"\
+          \nINACTIVE_CLIENT_URL=\"http://${CLIENT_BASE}-${INACTIVE_COLOR}.centralindia.azurecontainer.io:3000\"\
+          \n\necho \"Smoke testing backend: $INACTIVE_SERVER_URL\"\necho \"Smoke testing\
+          \ frontend: $INACTIVE_CLIENT_URL\"\n\nSMOKE_PASSED=false\nfor i in 1 2 3\
+          \ 4 5; do\n  SERVER_STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"\
+          $INACTIVE_SERVER_URL\" --max-time 10 || echo \"000\")\n  CLIENT_STATUS=$(curl\
+          \ -s -o /dev/null -w \"%{http_code}\" \"$INACTIVE_CLIENT_URL\" --max-time\
+          \ 10 || echo \"000\")\n\n  echo \"  Attempt $i: Backend HTTP $SERVER_STATUS\
+          \ | Frontend HTTP $CLIENT_STATUS\"\n\n  if [ \"$SERVER_STATUS\" = \"200\"\
+          \ ] && [ \"$CLIENT_STATUS\" = \"200\" ]; then\n    SMOKE_PASSED=true\n \
+          \   break\n  fi\n  sleep 15\ndone\n\nif [ \"$SMOKE_PASSED\" != \"true\"\
+          \ ]; then\n  echo \"::error::Smoke test FAILED on ${INACTIVE_COLOR} slot.\"\
+          \n  echo \"Rollback initiated: Tearing down broken ${INACTIVE_COLOR} containers...\"\
+          \n\n  az container delete --name \"${SERVER_BASE}-${INACTIVE_COLOR}\" --resource-group\
+          \ \"$RG\" --yes 2>/dev/null || true\n  az container delete --name \"${CLIENT_BASE}-${INACTIVE_COLOR}\"\
+          \ --resource-group \"$RG\" --yes 2>/dev/null || true\n\n  echo \"Rollback\
+          \ complete. Active slot (${ACTIVE_COLOR}) unchanged and remains live.\"\n\
+          \  exit 1\nfi\n\necho \"Smoke tests PASSED. Flipping NGINX from ${ACTIVE_COLOR}\
+          \ -> ${INACTIVE_COLOR} ...\"\n\naz container create \\\n  --name \"$NGINX_LABEL\"\
+          \ \\\n  --resource-group \"$RG\" \\\n  --location centralindia \\\n  --os-type\
+          \ Linux \\\n  --image \"$LOGIN_SERVER/nginx:${{ github.sha }}\" \\\n  --registry-login-server\
+          \ \"$LOGIN_SERVER\" \\\n  --registry-username \"$USERNAME\" \\\n  --registry-password\
+          \ \"$PASSWORD\" \\\n  --dns-name-label \"$NGINX_LABEL\" \\\n  --ports 80\
+          \ \\\n  --environment-variables \\\n      ACTIVE_COLOR=\"$INACTIVE_COLOR\"\
+          \ \\\n      BLUE_SERVER_HOST=\"$BLUE_SERVER_HOST\" \\\n      GREEN_SERVER_HOST=\"\
+          $GREEN_SERVER_HOST\" \\\n      BLUE_CLIENT_HOST=\"$BLUE_CLIENT_HOST\" \\\
+          \n      GREEN_CLIENT_HOST=\"$GREEN_CLIENT_HOST\" \\\n      RESOLVER_IP=\"\
+          168.63.129.16\" \\\n  --cpu 0.25 --memory 0.5\n\nif [ \"$ACTIVE_COLOR\"\
+          \ != \"blue\" ] && [ \"$ACTIVE_COLOR\" != \"green\" ]; then\n  echo \"Initial\
+          \ deployment detected. No old containers to teardown.\"\nelse\n  echo \"\
+          Traffic successfully routed to ${INACTIVE_COLOR}.\"\n  echo \"Tearing down\
+          \ old ${ACTIVE_COLOR} slot to save Azure costs...\"\n  az container delete\
+          \ --name \"${SERVER_BASE}-${ACTIVE_COLOR}\" --resource-group \"$RG\" --yes\
+          \ 2>/dev/null || echo \"Server delete skipped/failed\"\n  az container delete\
+          \ --name \"${CLIENT_BASE}-${ACTIVE_COLOR}\" --resource-group \"$RG\" --yes\
+          \ 2>/dev/null || echo \"Client delete skipped/failed\"\nfi\n\necho \"active_slot=$INACTIVE_COLOR\"\
+          \ >> $GITHUB_OUTPUT\necho \"public_url=http://$NGINX_LABEL.centralindia.azurecontainer.io\"\
+          \ >> $GITHUB_OUTPUT\n\necho \"\"\necho \"Deployment complete.\"\necho \"\
+          \  Active slot : $INACTIVE_COLOR\"\necho \"  Public URL  : http://$NGINX_LABEL.centralindia.azurecontainer.io\"\
+          \n"
+      - name: Deployment Success Notification
+        if: success()
+        run: "END_TIME=$(date +%s)\nDURATION=$((END_TIME - DEPLOY_START_TIME))\nWEBHOOK_URL=\"\
+          ${{ secrets.WEBHOOK_URL }}\"\nif [ -z \"$WEBHOOK_URL\" ]; then\n  echo \"\
+          WEBHOOK_URL secret not set. Skipping notification.\"\n  exit 0\nfi\n\nMESSAGE=\"\
+          \u2705 **Deployment Successful**\\n\\n**Commit:** \\`${{ github.sha }}\\\
+          `\\n**Duration:** \\`${DURATION} seconds\\`\\n**Active Slot:** \\`${{ steps.deploy.outputs.active_slot\
+          \ }}\\`\\n**URL:** ${{ steps.deploy.outputs.public_url }}\"\n\ncurl -H \"\
+          Content-Type: application/json\" \\\n     -d \"{\\\"content\\\": \\\"$MESSAGE\\\
+          \", \\\"text\\\": \\\"$MESSAGE\\\"}\" \\\n     $WEBHOOK_URL\n"
+      - name: Deployment Failure Notification
+        if: failure()
+        run: "WEBHOOK_URL=\"${{ secrets.WEBHOOK_URL }}\"\nif [ -z \"$WEBHOOK_URL\"\
+          \ ]; then\n  echo \"WEBHOOK_URL secret not set. Skipping notification.\"\
+          \n  exit 0\nfi\n\nMESSAGE=\"\u274C **Deployment Failed**\\n\\n**Commit:**\
+          \ \\`${{ github.sha }}\\`\\n**Job:** \\`${{ github.job }}\\`\\nPlease check\
+          \ the [GitHub Actions Logs](${{ github.server_url }}/${{ github.repository\
+          \ }}/actions/runs/${{ github.run_id }}) for details.\"\n\ncurl -H \"Content-Type:\
+          \ application/json\" \\\n     -d \"{\\\"content\\\": \\\"$MESSAGE\\\", \\\
+          \"text\\\": \\\"$MESSAGE\\\"}\" \\\n     $WEBHOOK_URL\n"
+      - name: Push DORA Metrics to Prometheus Pushgateway
+        if: always()
+        run: "END_TIME=$(date +%s)\nDURATION=$((END_TIME - DEPLOY_START_TIME))\n\n\
+          # x1: Build duration\nX1=$DURATION\n\n# x2: Number of modified files\nif\
+          \ git rev-parse HEAD~1 >/dev/null 2>&1; then\n  X2=$(git diff --name-only\
+          \ HEAD~1 HEAD | wc -l)\nelse\n  X2=$(git ls-files | wc -l)\nfi\n\n# x3:\
+          \ Test failure (0 for success, 1 for failure). We use job status.\nJOB_STATUS=\"\
+          ${{ job.status }}\"\nif [ \"$JOB_STATUS\" = \"success\" ]; then\n  X3=0\n\
+          \  SUCCESS_VAL=1\nelse\n  X3=1\n  SUCCESS_VAL=0\nfi\n\n# xn: Code complexity\
+          \ score (using an approximation based on modified files)\nXN=$((10 + X2\
+          \ / 2))\n\n# Logistic Regression Formula matching Quantitative Performance\
+          \ Analysis\n# P = 1 / (1 + e^-(B0 + B1*X1 + B2*X2 + B3*X3 + Bn*Xn))\nPROBABILITY=$(awk\
+          \ -v x1=\"$X1\" -v x2=\"$X2\" -v x3=\"$X3\" -v xn=\"$XN\" 'BEGIN {\n  z\
+          \ = -3.0 + (0.002 * x1) + (0.05 * x2) + (2.0 * x3) + (0.1 * xn);\n  p =\
+          \ 1 / (1 + exp(-z));\n  printf \"%.4f\", p;\n}')\n\necho \"DORA Metrics\
+          \ Computed:\"\necho \"  Duration (x1): $X1\"\necho \"  Modified Files (x2):\
+          \ $X2\"\necho \"  Failure Status (x3): $X3\"\necho \"  Complexity (xn):\
+          \ $XN\"\necho \"  Failure Probability (P): $PROBABILITY\"\n\nLEGACY_PUSHGATEWAY_URL=\"\
+          http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/github_actions\"\
+          \nPUSHGATEWAY_URL=\"http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/github_actions/run_id/${{\
+          \ github.run_id }}\"\n\n# Retry push up to 5 times (pushgateway might just\
+          \ be booting up)\nMETRICS_PAYLOAD=$(cat <<EOF\nci_deployment_duration_seconds\
+          \ $X1\nci_deployment_modified_files $X2\nci_deployment_test_failure $X3\n\
+          ci_deployment_complexity_score $XN\nci_deployment_failure_probability $PROBABILITY\n\
+          ci_deployment_success_total $SUCCESS_VAL\nci_deployment_count_total 1\n\
+          EOF\n)\n\necho \"$METRICS_PAYLOAD\" > metrics.txt\ncurl -s -X DELETE \"\
+          $LEGACY_PUSHGATEWAY_URL\" >/dev/null || true\n\nfor i in 1 2 3 4 5; do\n\
+          \  echo \"Attempt $i to push metrics...\"\n  if curl -f -v --data-binary\
+          \ @metrics.txt \"$PUSHGATEWAY_URL\"; then\n    echo \"Successfully pushed\
+          \ DORA metrics to $PUSHGATEWAY_URL\"\n    break\n  else\n    echo \"Push\
+          \ failed. Waiting 10s...\"\n    sleep 10\n  fi\ndone\n"
+    needs:
+      - validate
+      - infrastructure
