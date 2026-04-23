@@ -614,19 +614,35 @@ jobs:
           # xn: Code complexity score (using an approximation based on modified files)
           XN=$((10 + X2 / 2))
 
-          # Logistic Regression Formula matching Quantitative Performance Analysis
-          # P = 1 / (1 + e^-(B0 + B1*X1 + B2*X2 + B3*X3 + Bn*Xn))
-          PROBABILITY=$(awk -v x1="$X1" -v x2="$X2" -v x3="$X3" -v xn="$XN" 'BEGIN {
-            z = -3.0 + (0.002 * x1) + (0.05 * x2) + (2.0 * x3) + (0.1 * xn);
-            p = 1 / (1 + exp(-z));
-            printf "%.4f", p;
-          }')
+          # Predictive risk model.
+          # The previous formula included the already-known job outcome (x3),
+          # which made failed or large deployments saturate near 100%. Keep the
+          # prediction based on normalized risk drivers, and expose x3 separately
+          # as ci_deployment_test_failure / ci_deployment_success_total.
+          read -r PROBABILITY DURATION_RISK CHANGE_RISK COMPLEXITY_RISK <<< "$(awk -v x1="$X1" -v x2="$X2" -v xn="$XN" 'BEGIN {
+            duration_risk = x1 / 900;
+            change_risk = x2 / 60;
+            complexity_risk = xn / 50;
+
+            if (duration_risk > 1) duration_risk = 1;
+            if (change_risk > 1) change_risk = 1;
+            if (complexity_risk > 1) complexity_risk = 1;
+
+            p = 0.005 + (0.035 * duration_risk) + (0.045 * change_risk) + (0.020 * complexity_risk);
+            if (p < 0) p = 0;
+            if (p > 0.25) p = 0.25;
+
+            printf "%.4f %.4f %.4f %.4f", p, duration_risk, change_risk, complexity_risk;
+          }')"
 
           echo "DORA Metrics Computed:"
           echo "  Duration (x1): $X1"
           echo "  Modified Files (x2): $X2"
           echo "  Failure Status (x3): $X3"
           echo "  Complexity (xn): $XN"
+          echo "  Duration Risk: $DURATION_RISK"
+          echo "  Change Risk: $CHANGE_RISK"
+          echo "  Complexity Risk: $COMPLEXITY_RISK"
           echo "  Failure Probability (P): $PROBABILITY"
 
           LEGACY_PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/github_actions"
@@ -638,6 +654,9 @@ jobs:
           ci_deployment_modified_files $X2
           ci_deployment_test_failure $X3
           ci_deployment_complexity_score $XN
+          ci_deployment_duration_risk_ratio $DURATION_RISK
+          ci_deployment_change_risk_ratio $CHANGE_RISK
+          ci_deployment_complexity_risk_ratio $COMPLEXITY_RISK
           ci_deployment_failure_probability $PROBABILITY
           ci_deployment_success_total $SUCCESS_VAL
           ci_deployment_count_total 1

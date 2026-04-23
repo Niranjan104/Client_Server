@@ -4,18 +4,22 @@
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
   "links": [],
   "liveNow": false,
   "panels": [
     {
       "datasource": "Prometheus",
+      "description": "Shows the latest run-scoped predicted failure risk, recomputed from duration, change size, and complexity so stale Pushgateway samples from the old formula cannot keep the gauge pinned at 100%.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
+          "decimals": 1,
+          "max": 1,
+          "min": 0,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -25,22 +29,32 @@
                 "value": null
               },
               {
+                "color": "yellow",
+                "value": 0.1
+              },
+              {
+                "color": "orange",
+                "value": 0.2
+              },
+              {
                 "color": "red",
-                "value": 0.5
+                "value": 0.35
               }
             ]
-          }
+          },
+          "unit": "percentunit"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
-        "w": 6,
+        "h": 8,
+        "w": 8,
         "x": 0,
         "y": 0
       },
       "id": 1,
       "options": {
+        "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -48,21 +62,22 @@
           "fields": "",
           "values": false
         },
-        "showThresholdLabels": false,
+        "showThresholdLabels": true,
         "showThresholdMarkers": true
       },
       "targets": [
         {
-          "expr": "avg(ci_deployment_failure_probability{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
-          "legendFormat": "Failure probability",
+          "expr": "(0.005 + (0.035 * clamp_max(ci_deployment_duration_seconds{job=\"github_actions\"} / 900, 1)) + (0.045 * clamp_max(ci_deployment_modified_files{job=\"github_actions\"} / 60, 1)) + (0.020 * clamp_max(ci_deployment_complexity_score{job=\"github_actions\"} / 50, 1))) and on(job, run_id) topk(1, push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
+          "legendFormat": "Latest run",
           "refId": "A"
         }
       ],
-      "title": "Failure Probability Prediction",
+      "title": "Latest Failure Probability",
       "type": "gauge"
     },
     {
       "datasource": "Prometheus",
+      "description": "Run-scoped failure-risk history for the selected time range, using the corrected normalized risk model.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -71,33 +86,38 @@
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Successful builds / sec",
+            "axisLabel": "Failure probability",
             "axisPlacement": "left",
+            "axisSoftMax": 1,
+            "axisSoftMin": 0,
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
+            "fillOpacity": 18,
+            "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
+            "lineInterpolation": "smooth",
+            "lineWidth": 3,
+            "pointSize": 6,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
-            "spanNulls": false,
+            "showPoints": "always",
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
+          "decimals": 1,
+          "max": 1,
+          "min": 0,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -107,46 +127,54 @@
                 "value": null
               },
               {
+                "color": "yellow",
+                "value": 0.1
+              },
+              {
+                "color": "orange",
+                "value": 0.2
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 0.35
               }
             ]
-          }
+          },
+          "unit": "percentunit"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
-        "w": 18,
-        "x": 6,
+        "h": 8,
+        "w": 16,
+        "x": 8,
         "y": 0
       },
       "id": 2,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
-          "expr": "sum(ci_deployment_success_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)) / clamp_min(sum(ci_deployment_duration_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)), 1)",
-          "legendFormat": "Successful builds per second of pipeline time",
+          "expr": "(0.005 + (0.035 * clamp_max(ci_deployment_duration_seconds{job=\"github_actions\"} / 900, 1)) + (0.045 * clamp_max(ci_deployment_modified_files{job=\"github_actions\"} / 60, 1)) + (0.020 * clamp_max(ci_deployment_complexity_score{job=\"github_actions\"} / 50, 1))) and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)",
+          "legendFormat": "Run {{run_id}}",
           "refId": "A"
         }
       ],
-      "title": "CI Pipeline Throughput",
-      "type": "timeseries",
-      "custom": {
-        "axisLabel": "Time",
-        "axisPlacement": "bottom"
-      }
+      "title": "Failure Probability Trend",
+      "type": "timeseries"
     },
     {
       "datasource": "Prometheus",
@@ -155,6 +183,70 @@
           "color": {
             "mode": "thresholds"
           },
+          "decimals": 1,
+          "max": 1,
+          "min": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.9
+              },
+              {
+                "color": "green",
+                "value": 0.98
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(ci_deployment_success_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)) / clamp_min(sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)), 1)",
+          "legendFormat": "Success rate",
+          "refId": "A"
+        }
+      ],
+      "title": "Deployment Success Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -164,25 +256,34 @@
                 "value": null
               },
               {
+                "color": "yellow",
+                "value": 300
+              },
+              {
+                "color": "orange",
+                "value": 600
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 900
               }
             ]
-          }
+          },
+          "unit": "s"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 6,
         "w": 6,
-        "x": 0,
-        "y": 6
+        "x": 6,
+        "y": 8
       },
-      "id": 3,
+      "id": 4,
       "options": {
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "area",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -196,7 +297,7 @@
       "targets": [
         {
           "expr": "sum(ci_deployment_duration_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)) / clamp_min(sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)), 1)",
-          "legendFormat": "Average duration (seconds)",
+          "legendFormat": "Average duration",
           "refId": "A"
         }
       ],
@@ -210,75 +311,22 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "percentage",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 90
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 6,
-        "x": 6,
-        "y": 6
-      },
-      "id": 4,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "expr": "(sum(ci_deployment_success_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)) / clamp_min(sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)), 1)) * 100",
-          "legendFormat": "% successful",
-          "refId": "A"
-        }
-      ],
-      "title": "Deployment Success Rate (%)",
-      "type": "stat"
-    },
-    {
-      "datasource": "Prometheus",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
+          "decimals": 0,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               },
               {
-                "color": "red",
-                "value": 80
+                "color": "green",
+                "value": 1
               }
             ]
-          }
+          },
+          "unit": "short"
         },
         "overrides": []
       },
@@ -286,13 +334,13 @@
         "h": 6,
         "w": 6,
         "x": 12,
-        "y": 6
+        "y": 8
       },
       "id": 5,
       "options": {
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "area",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -306,11 +354,11 @@
       "targets": [
         {
           "expr": "sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
-          "legendFormat": "Deploys / day",
+          "legendFormat": "Deployments",
           "refId": "A"
         }
       ],
-      "title": "Deployment Frequency (DF)",
+      "title": "Deployments In Range",
       "type": "stat"
     },
     {
@@ -320,6 +368,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "decimals": 1,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -329,11 +378,20 @@
                 "value": null
               },
               {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "orange",
+                "value": 30
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 60
               }
             ]
-          }
+          },
+          "unit": "short"
         },
         "overrides": []
       },
@@ -341,13 +399,13 @@
         "h": 6,
         "w": 6,
         "x": 18,
-        "y": 6
+        "y": 8
       },
       "id": 6,
       "options": {
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "area",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -361,18 +419,183 @@
       "targets": [
         {
           "expr": "sum(ci_deployment_modified_files{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)) / clamp_min(sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)), 1)",
-          "legendFormat": "Modified files / deployment",
+          "legendFormat": "Average modified files",
           "refId": "A"
         }
       ],
       "title": "Average Modified Files",
       "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Latest normalized inputs used by the prediction model. A value near 0 is low risk; a value near 100% is saturated risk for that driver.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "max": 1,
+          "min": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "orange",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "id": 7,
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 24,
+        "minVizWidth": 8,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "text": {}
+      },
+      "targets": [
+        {
+          "expr": "clamp_max(ci_deployment_duration_seconds{job=\"github_actions\"} / 900, 1) and on(job, run_id) topk(1, push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
+          "legendFormat": "Duration risk",
+          "refId": "A"
+        },
+        {
+          "expr": "clamp_max(ci_deployment_modified_files{job=\"github_actions\"} / 60, 1) and on(job, run_id) topk(1, push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
+          "legendFormat": "Change size risk",
+          "refId": "B"
+        },
+        {
+          "expr": "clamp_max(ci_deployment_complexity_score{job=\"github_actions\"} / 50, 1) and on(job, run_id) topk(1, push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
+          "legendFormat": "Complexity risk",
+          "refId": "C"
+        }
+      ],
+      "title": "Latest Risk Drivers",
+      "type": "bargauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Deployments per pipeline hour",
+            "axisPlacement": "left",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 3,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "(sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)) / clamp_min(sum(ci_deployment_duration_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)), 1)) * 3600",
+          "legendFormat": "Deployments/hour",
+          "refId": "A"
+        }
+      ],
+      "title": "CI Deployment Throughput",
+      "type": "timeseries"
     }
   ],
-  "refresh": "5s",
+  "refresh": "10s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": [],
+  "tags": [
+    "dora",
+    "ci-cd"
+  ],
   "templating": {
     "list": []
   },
@@ -384,5 +607,5 @@
   "timezone": "",
   "title": "Quantitative Performance Analysis (DORA)",
   "uid": "dora-metrics-paper-db",
-  "version": 2
+  "version": 3
 }
