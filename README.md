@@ -6,7 +6,7 @@ Currently, this repository contains a placeholder "Tea Stall" application, but i
 
 ## 🏗️ Architecture Flow
 
-The CI/CD pipeline builds container images, pushes them to Azure Container Registry, and deploys the app stack to Azure Container Apps behind an NGINX gateway.
+The CI/CD pipeline builds container images, pushes them to Azure Container Registry, and deploys the app stack to Azure Container Apps behind an NGINX gateway with blue-green slot switching.
 
 ```mermaid
 graph TD;
@@ -14,16 +14,22 @@ graph TD;
     GitHubActions-->|Builds & Scans Docker Images|ACR[(Azure Container Registry)]
     
     subgraph Azure Container Apps
-        NGINX[NGINX Gateway Container App]
-        Client[Frontend Container App]
-        Server[Backend Container App]
+        NGINX[Stable NGINX Gateway Container App]
+        ClientBlue[Frontend Blue Slot]
+        ClientGreen[Frontend Green Slot]
+        ServerBlue[Backend Blue Slot]
+        ServerGreen[Backend Green Slot]
 
-        NGINX-->|Routes /*|Client
-        NGINX-->|Routes /api/*|Server
+        NGINX-->|Routes /* to active slot|ClientBlue
+        NGINX-->|Routes /* to active slot|ClientGreen
+        NGINX-->|Routes /api/* to active slot|ServerBlue
+        NGINX-->|Routes /api/* to active slot|ServerGreen
         ACA[Container Apps HTTP Autoscaler]
         ACA-.->|Adds/removes replicas|NGINX
-        ACA-.->|Adds/removes replicas|Client
-        ACA-.->|Adds/removes replicas|Server
+        ACA-.->|Adds/removes replicas|ClientBlue
+        ACA-.->|Adds/removes replicas|ClientGreen
+        ACA-.->|Adds/removes replicas|ServerBlue
+        ACA-.->|Adds/removes replicas|ServerGreen
     end
     
     User-->|Visits Public IP/Domain|NGINX
@@ -36,9 +42,10 @@ graph TD;
 Scaling and load balancing are now handled by Azure Container Apps:
 
 * **Terraform baseline:** `infra/main.tf` creates the shared Azure Container Apps environment and Log Analytics workspace.
-* **GitHub Actions deployment:** `.github/workflows/pipeline.yml` creates or updates the `server`, `client`, and `nginx` Container Apps after Docker images are pushed to ACR.
+* **GitHub Actions deployment:** `.github/workflows/pipeline.yml` deploys the inactive `blue` or `green` server and client slot, validates it behind a fresh NGINX revision, then flips the public gateway only after smoke tests pass.
 * **Autoscaling:** each Container App has an HTTP concurrency scale rule with configurable min/max replicas.
-* **Load balancing:** Azure Container Apps automatically load balances traffic across healthy replicas of each app. NGINX routes `/api/*` to the backend app URL and all other traffic to the frontend app URL.
+* **Blue-green cutover:** NGINX remains the stable public endpoint while the workflow alternates between `server-<slot>` and `client-<slot>` Container Apps. After a successful switch, the replaced slot is deleted.
+* **Load balancing:** Azure Container Apps automatically load balances traffic across healthy replicas of the active slot. NGINX routes `/api/*` to the backend slot URL and all other traffic to the frontend slot URL.
 * **Local Compose:** `docker-compose.yml` still runs the same gateway pattern locally using `BACKEND_UPSTREAM_URL` and `CLIENT_UPSTREAM_URL`.
 
 To tune production scale, add or update GitHub Actions repository variables:
@@ -96,9 +103,9 @@ Once created, map the following secrets into your GitHub repository settings und
     The script will automatically authenticate with Azure and output the exact JSON block you need to copy and paste directly into the secret.
 *   **`ACI_RESOURCE_GROUP`**: The exact name you used for `$RG_NAME`. The name is kept for backwards compatibility with the existing workflow.
 *   **`ACR_NAME`**: The short ACR name, for example `myappregistry123`.
-*   **`CLIENT_BASE_NAME`**: Azure Container App name for the frontend, for example `client-myapp`.
-*   **`SERVER_BASE_NAME`**: Azure Container App name for the backend, for example `server-myapp`.
-*   **`NGINX_DNS_LABEL`**: Azure Container App name for the public gateway, for example `nginx-myapp`.
+*   **`CLIENT_BASE_NAME`**: Base Azure Container App name for the frontend slot pair, for example `client-myapp` which becomes `client-myapp-blue` and `client-myapp-green`.
+*   **`SERVER_BASE_NAME`**: Base Azure Container App name for the backend slot pair, for example `server-myapp` which becomes `server-myapp-blue` and `server-myapp-green`.
+*   **`NGINX_DNS_LABEL`**: Azure Container App name for the stable public gateway, for example `nginx-myapp`.
 
 ---
 
@@ -107,7 +114,7 @@ Once created, map the following secrets into your GitHub repository settings und
 This repository logically separates the stack into 3 core standalone directories:
 1. `client/` - The frontend application (currently a dummy Next.js App)
 2. `server/` - The backend API (currently a dummy Node.js App)
-3. `nginx/` - The gateway configuration that routes browser traffic to the frontend and `/api/*` traffic to the backend Container App.
+3. `nginx/` - The gateway configuration that routes browser traffic to the active frontend slot and `/api/*` traffic to the active backend slot.
 
 **To integrate your own application:**
 1. Delete all the files inside the `client/` folder. Paste your own React/Next.js/Vue frontend code inside it.
@@ -122,12 +129,12 @@ Once pushed to `main`, the GitHub Action detects your new code, packages it, and
 ## 📊 3. Monitoring, Logs, and Deployment Tracking
 
 ### Where to see how things are working?
-Since this architecture uses Azure Container Apps, replica count, CPU, memory, requests, and logs are available in the Azure Portal under each Container App.
+Since this architecture uses Azure Container Apps, replica count, CPU, memory, requests, and logs are available in the Azure Portal under each Container App slot and the stable gateway.
 
 1. **Viewing Live Application Logs:** 
    * Navigate to the **Azure Portal**.
    * Go to your **Resource Group** (`rg-app-prod`).
-   * Click on the currently running Container App, for example `client-myapp`, `server-myapp`, or `nginx-myapp`.
+   * Click on the currently running Container App, for example `client-myapp-blue`, `client-myapp-green`, `server-myapp-blue`, `server-myapp-green`, or `nginx-myapp`.
    * Open **Log stream** or the connected **Log Analytics** workspace to inspect runtime logs.
    
 2. **Viewing Server Health & Metrics:**
@@ -141,6 +148,6 @@ Since this architecture uses Azure Container Apps, replica count, CPU, memory, r
 
 ## 🛡️ Built-in Quality Controls
 
-* **Autoscaling:** Azure Container Apps scales NGINX, frontend, and backend replicas based on concurrent HTTP traffic.
+* **Autoscaling:** Azure Container Apps scales the stable NGINX gateway and the active blue or green frontend and backend slot based on concurrent HTTP traffic.
 * **Code Scanning:** `ci.yml` embeds Trivy image scanning, ensuring no Docker image with a Critical OS-level Vulnerability reaches production.
 * **Cost Optimized:** Container Apps can scale to zero when `MIN_REPLICAS=0`; keep `MIN_REPLICAS=1` only where you want warm capacity.

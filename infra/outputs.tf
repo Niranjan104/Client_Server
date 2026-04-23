@@ -18,14 +18,24 @@ output "nginx_public_url" {
   value       = "https://${var.nginx_dns_label}.${azurerm_container_app_environment.app.default_domain}"
 }
 
-output "server_container_app_url" {
-  description = "Expected public URL for the backend Container App after the delivery job creates it."
-  value       = "https://${var.server_name}.${azurerm_container_app_environment.app.default_domain}"
+output "server_blue_container_app_url" {
+  description = "Expected internal URL for the blue backend Container App slot after the delivery job creates it."
+  value       = "https://${var.server_name}-blue.${azurerm_container_app_environment.app.default_domain}"
 }
 
-output "client_container_app_url" {
-  description = "Expected public URL for the frontend Container App after the delivery job creates it."
-  value       = "https://${var.client_name}.${azurerm_container_app_environment.app.default_domain}"
+output "server_green_container_app_url" {
+  description = "Expected internal URL for the green backend Container App slot after the delivery job creates it."
+  value       = "https://${var.server_name}-green.${azurerm_container_app_environment.app.default_domain}"
+}
+
+output "client_blue_container_app_url" {
+  description = "Expected internal URL for the blue frontend Container App slot after the delivery job creates it."
+  value       = "https://${var.client_name}-blue.${azurerm_container_app_environment.app.default_domain}"
+}
+
+output "client_green_container_app_url" {
+  description = "Expected internal URL for the green frontend Container App slot after the delivery job creates it."
+  value       = "https://${var.client_name}-green.${azurerm_container_app_environment.app.default_domain}"
 }
 
 output "monitoring_public_url" {

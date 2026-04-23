@@ -21,7 +21,7 @@ variable "acr_password" {
 }
 
 variable "server_name" {
-  description = "Azure Container App name for the backend API."
+  description = "Base Azure Container App name for the backend slot pair. The delivery workflow creates <server_name>-blue and <server_name>-green."
   type        = string
   default     = "server-teastall"
 
@@ -32,7 +32,7 @@ variable "server_name" {
 }
 
 variable "client_name" {
-  description = "Azure Container App name for the frontend."
+  description = "Base Azure Container App name for the frontend slot pair. The delivery workflow creates <client_name>-blue and <client_name>-green."
   type        = string
   default     = "client-teastall"
 
@@ -43,7 +43,7 @@ variable "client_name" {
 }
 
 variable "nginx_dns_label" {
-  description = "Azure Container App name for the public NGINX gateway."
+  description = "Azure Container App name for the stable public NGINX gateway that switches between blue and green slots."
   type        = string
   default     = "nginx-teastall"
 

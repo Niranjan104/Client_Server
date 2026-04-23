@@ -67,9 +67,9 @@ If you want to see fresh DORA data after these changes, trigger a new deployment
 
 The application runtime now runs on Azure Container Apps. For production runtime health, use the Azure Portal Container App metrics and the Log Analytics workspace created by Terraform:
 
-- `server` Container App: backend replica count, requests, CPU, memory, and logs
-- `client` Container App: frontend replica count, requests, CPU, memory, and logs
-- `nginx` Container App: gateway replica count, ingress requests, CPU, memory, and logs
+- `server-*-blue` and `server-*-green` Container Apps: backend slot replica count, requests, CPU, memory, and logs
+- `client-*-blue` and `client-*-green` Container Apps: frontend slot replica count, requests, CPU, memory, and logs
+- `nginx` Container App: stable gateway replica count, ingress requests, CPU, memory, and logs
 
 The cloud Prometheus/Pushgateway/Grafana monitoring group remains on ACI for deployment analytics. The cloud Prometheus configuration intentionally scrapes only:
 

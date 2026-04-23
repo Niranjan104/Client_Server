@@ -515,7 +515,181 @@ jobs:
           az provider register --namespace Microsoft.App --wait --only-show-errors
           az provider register --namespace Microsoft.OperationalInsights --wait --only-show-errors
 
-          ensure_container_app() {
+          app_exists() {
+            az containerapp show --name "$1" --resource-group "$RG" --output none 2>/dev/null
+          }
+
+          get_container_app_fqdn() {
+            az containerapp show \
+              --name "$1" \
+              --resource-group "$RG" \
+              --query "properties.configuration.ingress.fqdn" \
+              --output tsv
+          }
+
+          get_active_nginx_revision() {
+            current_revision=$(az containerapp ingress traffic show --name "$NGINX_LABEL" --resource-group "$RG" --query "[?weight==100].revisionName | [0]" -o tsv 2>/dev/null || echo "")
+            if [ -z "$current_revision" ] || [ "$current_revision" = "latest" ]; then
+              current_revision=$(az containerapp revision list --name "$NGINX_LABEL" --resource-group "$RG" --query "[?properties.active==true].name | [0]" -o tsv 2>/dev/null || echo "")
+            fi
+
+            echo "$current_revision"
+          }
+
+          get_revision_env_value() {
+            app_name="$1"
+            revision_name="$2"
+            env_name="$3"
+
+            if [ -z "$revision_name" ]; then
+              echo ""
+              return 0
+            fi
+
+            az containerapp revision show \
+              --name "$app_name" \
+              --resource-group "$RG" \
+              --revision "$revision_name" \
+              --query "properties.template.containers[0].env[?name=='$env_name'].value | [0]" \
+              --output tsv 2>/dev/null || echo ""
+          }
+
+          get_app_env_value() {
+            app_name="$1"
+            env_name="$2"
+
+            az containerapp show \
+              --name "$app_name" \
+              --resource-group "$RG" \
+              --query "properties.template.containers[0].env[?name=='$env_name'].value | [0]" \
+              --output tsv 2>/dev/null || echo ""
+          }
+
+          resolve_active_slot() {
+            active_slot=""
+
+            if app_exists "$NGINX_LABEL"; then
+              nginx_active_revision=$(get_active_nginx_revision)
+              active_slot=$(get_revision_env_value "$NGINX_LABEL" "$nginx_active_revision" "ACTIVE_SLOT")
+
+              if [ "$active_slot" != "blue" ] && [ "$active_slot" != "green" ]; then
+                backend_upstream=$(get_revision_env_value "$NGINX_LABEL" "$nginx_active_revision" "BACKEND_UPSTREAM_URL")
+                case "$backend_upstream" in
+                  *-blue* ) active_slot="blue" ;;
+                  *-green* ) active_slot="green" ;;
+                esac
+              fi
+
+              if [ "$active_slot" != "blue" ] && [ "$active_slot" != "green" ]; then
+                active_slot=$(get_app_env_value "$NGINX_LABEL" "ACTIVE_SLOT")
+              fi
+
+              if [ "$active_slot" != "blue" ] && [ "$active_slot" != "green" ]; then
+                backend_upstream=$(get_app_env_value "$NGINX_LABEL" "BACKEND_UPSTREAM_URL")
+                case "$backend_upstream" in
+                  *-blue* ) active_slot="blue" ;;
+                  *-green* ) active_slot="green" ;;
+                esac
+              fi
+            fi
+
+            if [ "$active_slot" != "blue" ] && [ "$active_slot" != "green" ]; then
+              if app_exists "${SERVER_BASE}-blue" || app_exists "${CLIENT_BASE}-blue"; then
+                if ! app_exists "${SERVER_BASE}-green" && ! app_exists "${CLIENT_BASE}-green"; then
+                  active_slot="blue"
+                fi
+              fi
+            fi
+
+            if [ "$active_slot" != "blue" ] && [ "$active_slot" != "green" ]; then
+              if app_exists "${SERVER_BASE}-green" || app_exists "${CLIENT_BASE}-green"; then
+                if ! app_exists "${SERVER_BASE}-blue" && ! app_exists "${CLIENT_BASE}-blue"; then
+                  active_slot="green"
+                fi
+              fi
+            fi
+
+            if [ "$active_slot" != "blue" ] && [ "$active_slot" != "green" ]; then
+              if (app_exists "${SERVER_BASE}-blue" || app_exists "${CLIENT_BASE}-blue") \
+                && (app_exists "${SERVER_BASE}-green" || app_exists "${CLIENT_BASE}-green"); then
+                echo "::error::Unable to determine the active blue/green slot from the existing NGINX configuration. Please inspect the current slot apps before rerunning the deployment." >&2
+                exit 1
+              fi
+            fi
+
+            echo "$active_slot"
+          }
+
+          ensure_slot_container_app() {
+            app_name="$1"
+            image="$2"
+            target_port="$3"
+            min_replicas="$4"
+            max_replicas="$5"
+            http_concurrency="$6"
+            cpu="$7"
+            memory="$8"
+            ingress_type="$9"
+            shift 9
+
+            if app_exists "$app_name"; then
+              echo "Updating target slot Container App: $app_name"
+              az containerapp ingress update \
+                --name "$app_name" \
+                --resource-group "$RG" \
+                --type "$ingress_type" \
+                --target-port "$target_port" \
+                --transport auto \
+                --only-show-errors \
+                --output none
+              az containerapp update \
+                --name "$app_name" \
+                --resource-group "$RG" \
+                --image "$image" \
+                --min-replicas "$min_replicas" \
+                --max-replicas "$max_replicas" \
+                --scale-rule-name http-scale \
+                --scale-rule-http-concurrency "$http_concurrency" \
+                --cpu "$cpu" \
+                --memory "$memory" \
+                --replace-env-vars "$@" \
+                --only-show-errors \
+                --output none
+            else
+              echo "Creating target slot Container App: $app_name"
+              az containerapp create \
+                --name "$app_name" \
+                --resource-group "$RG" \
+                --environment "$ACA_ENV_NAME" \
+                --image "$image" \
+                --registry-server "$LOGIN_SERVER" \
+                --registry-username "$USERNAME" \
+                --registry-password "$PASSWORD" \
+                --target-port "$target_port" \
+                --ingress "$ingress_type" \
+                --transport auto \
+                --min-replicas "$min_replicas" \
+                --max-replicas "$max_replicas" \
+                --scale-rule-name http-scale \
+                --scale-rule-http-concurrency "$http_concurrency" \
+                --cpu "$cpu" \
+                --memory "$memory" \
+                --env-vars "$@" \
+                --only-show-errors \
+                --output none
+            fi
+
+            APP_FQDN=$(get_container_app_fqdn "$app_name")
+            if [ -z "$APP_FQDN" ] || [ "$APP_FQDN" = "null" ]; then
+              echo "::error::Unable to resolve FQDN for $app_name"
+              exit 1
+            fi
+
+            SAFE_APP_NAME="${app_name//-/_}"
+            export "${SAFE_APP_NAME}_APP_FQDN"="$APP_FQDN"
+          }
+
+          ensure_nginx_gateway_revision() {
             app_name="$1"
             image="$2"
             target_port="$3"
@@ -526,26 +700,27 @@ jobs:
             memory="$8"
             shift 8
 
-            REV_SUFFIX="$(echo ${{ github.sha }} | cut -c1-7)-${{ github.run_attempt }}"
+            REV_SUFFIX="$(echo ${{ github.sha }} | cut -c1-7)-${{ github.run_attempt }}-${TARGET_SLOT}"
             REV_NAME="$app_name--$REV_SUFFIX"
 
-            if az containerapp show --name "$app_name" --resource-group "$RG" --output none 2>/dev/null; then
-              echo "Updating Container App: $app_name (Blue/Green Deployment)"
-              az containerapp revision set-mode --name "$app_name" --resource-group "$RG" --mode multiple --output none
+            if app_exists "$app_name"; then
+              echo "Updating public gateway Container App: $app_name"
+              az containerapp ingress update \
+                --name "$app_name" \
+                --resource-group "$RG" \
+                --type external \
+                --target-port "$target_port" \
+                --transport auto \
+                --only-show-errors \
+                --output none
+              az containerapp revision set-mode --name "$app_name" --resource-group "$RG" --mode multiple --only-show-errors --output none
 
-              CURRENT_REVISION=$(az containerapp ingress traffic show --name "$app_name" --resource-group "$RG" --query "[?weight==100].revisionName | [0]" -o tsv 2>/dev/null || echo "")
-
-              if [ -z "$CURRENT_REVISION" ] || [ "$CURRENT_REVISION" == "latest" ]; then
-                CURRENT_REVISION=$(az containerapp revision list --name "$app_name" --resource-group "$RG" --query "[?properties.active==true].name | [0]" -o tsv)
-                if [ -n "$CURRENT_REVISION" ]; then
-                  echo "Locking 100% traffic to current revision: $CURRENT_REVISION"
-                  az containerapp ingress traffic set --name "$app_name" --resource-group "$RG" --revision-weight "$CURRENT_REVISION=100" --output none
-                fi
-              else
-                echo "Traffic currently locked to revision: $CURRENT_REVISION"
+              CURRENT_REVISION=$(get_active_nginx_revision)
+              if [ -n "$CURRENT_REVISION" ]; then
+                echo "Locking 100% traffic to current NGINX revision: $CURRENT_REVISION"
+                az containerapp ingress traffic set --name "$app_name" --resource-group "$RG" --revision-weight "$CURRENT_REVISION=100" --only-show-errors --output none
               fi
 
-              echo "Deploying new revision: $REV_NAME with 0% initial traffic..."
               az containerapp update \
                 --name "$app_name" \
                 --resource-group "$RG" \
@@ -554,11 +729,14 @@ jobs:
                 --max-replicas "$max_replicas" \
                 --scale-rule-name http-scale \
                 --scale-rule-http-concurrency "$http_concurrency" \
+                --cpu "$cpu" \
+                --memory "$memory" \
                 --revision-suffix "$REV_SUFFIX" \
-                --set-env-vars "$@" \
+                --replace-env-vars "$@" \
+                --only-show-errors \
                 --output none
             else
-              echo "Creating Container App: $app_name"
+              echo "Creating public gateway Container App: $app_name"
               az containerapp create \
                 --name "$app_name" \
                 --resource-group "$RG" \
@@ -569,6 +747,7 @@ jobs:
                 --registry-password "$PASSWORD" \
                 --target-port "$target_port" \
                 --ingress external \
+                --transport auto \
                 --min-replicas "$min_replicas" \
                 --max-replicas "$max_replicas" \
                 --scale-rule-name http-scale \
@@ -576,26 +755,20 @@ jobs:
                 --cpu "$cpu" \
                 --memory "$memory" \
                 --revisions-mode multiple \
+                --revision-suffix "$REV_SUFFIX" \
                 --env-vars "$@" \
+                --only-show-errors \
                 --output none
             fi
 
             REV_FQDN=$(az containerapp revision show --name "$app_name" --resource-group "$RG" --revision "$REV_NAME" --query "properties.fqdn" -o tsv 2>/dev/null || echo "")
-            if [ -z "$REV_FQDN" ] || [ "$REV_FQDN" == "null" ]; then
-              REV_FQDN=$(az containerapp show --name "$app_name" --resource-group "$RG" --query "properties.configuration.ingress.fqdn" -o tsv)
+            if [ -z "$REV_FQDN" ] || [ "$REV_FQDN" = "null" ]; then
+              REV_FQDN=$(get_container_app_fqdn "$app_name")
             fi
 
             SAFE_APP_NAME="${app_name//-/_}"
             export "${SAFE_APP_NAME}_REV_NAME"="$REV_NAME"
             export "${SAFE_APP_NAME}_REV_FQDN"="$REV_FQDN"
-          }
-
-          get_container_app_fqdn() {
-            az containerapp show \
-              --name "$1" \
-              --resource-group "$RG" \
-              --query "properties.configuration.ingress.fqdn" \
-              --output tsv
           }
 
           smoke_url() {
@@ -618,6 +791,30 @@ jobs:
 
             if [ "$passed" != "true" ]; then
               echo "::error::$label smoke test failed for $url"
+              exit 1
+            fi
+          }
+
+          smoke_url_contains() {
+            label="$1"
+            url="$2"
+            expected="$3"
+            passed=false
+
+            for attempt in {1..18}; do
+              response=$(curl -ksS "$url" --max-time 20 || true)
+              echo "  ${label} attempt ${attempt}: looking for '${expected}' in $url"
+
+              if printf "%s" "$response" | grep -Fq "$expected"; then
+                passed=true
+                break
+              fi
+
+              sleep 10
+            done
+
+            if [ "$passed" != "true" ]; then
+              echo "::error::$label content check failed for $url"
               exit 1
             fi
           }
@@ -646,14 +843,22 @@ jobs:
             done
           }
 
-          shift_traffic() {
+          delete_container_app_if_present() {
             app_name="$1"
-            safe_name="${app_name//-/_}"
+
+            if [ -n "$app_name" ] && app_exists "$app_name"; then
+              echo "Deleting unused Container App: $app_name"
+              az containerapp delete --name "$app_name" --resource-group "$RG" --yes --only-show-errors --output none
+            fi
+          }
+
+          shift_nginx_traffic() {
+            safe_name="${NGINX_LABEL//-/_}"
             rev_var="${safe_name}_REV_NAME"
             rev_name="${!rev_var}"
-            
-            echo "Shifting 100% traffic to Green Revision: $rev_name"
-            az containerapp ingress traffic set --name "$app_name" --resource-group "$RG" --revision-weight "$rev_name=100" --output none
+
+            echo "Shifting 100% traffic to the validated ${TARGET_SLOT} gateway revision: $rev_name"
+            az containerapp ingress traffic set --name "$NGINX_LABEL" --resource-group "$RG" --revision-weight "$rev_name=100" --only-show-errors --output none
           }
 
           deactivate_old_revisions() {
@@ -662,18 +867,38 @@ jobs:
             az containerapp revision list --name "$app_name" --resource-group "$RG" --query "[?properties.trafficWeight==0 && properties.active==true].name" -o tsv | while read rev; do
               if [ -n "$rev" ]; then
                 echo "Deactivating old unused revision: $rev"
-                az containerapp revision deactivate --name "$app_name" --resource-group "$RG" --revision "$rev" --output none
+                az containerapp revision deactivate --name "$app_name" --resource-group "$RG" --revision "$rev" --only-show-errors --output none
               fi
             done
           }
 
+          ACTIVE_SLOT=$(resolve_active_slot)
+          if [ "$ACTIVE_SLOT" = "blue" ]; then
+            TARGET_SLOT="green"
+          else
+            TARGET_SLOT="blue"
+          fi
+
+          TARGET_SERVER_APP="${SERVER_BASE}-${TARGET_SLOT}"
+          TARGET_CLIENT_APP="${CLIENT_BASE}-${TARGET_SLOT}"
+
+          if [ "$ACTIVE_SLOT" = "blue" ] || [ "$ACTIVE_SLOT" = "green" ]; then
+            PREVIOUS_SERVER_APP="${SERVER_BASE}-${ACTIVE_SLOT}"
+            PREVIOUS_CLIENT_APP="${CLIENT_BASE}-${ACTIVE_SLOT}"
+          else
+            PREVIOUS_SERVER_APP=""
+            PREVIOUS_CLIENT_APP=""
+          fi
+
           echo "Container Apps environment : $ACA_ENV_NAME"
+          echo "Current active slot        : ${ACTIVE_SLOT:-none}"
+          echo "Target deployment slot     : $TARGET_SLOT"
           echo "Server autoscale          : min=$SERVER_MIN_REPLICAS max=$SERVER_MAX_REPLICAS concurrency=$SERVER_HTTP_CONCURRENCY"
           echo "Client autoscale          : min=$CLIENT_MIN_REPLICAS max=$CLIENT_MAX_REPLICAS concurrency=$CLIENT_HTTP_CONCURRENCY"
           echo "NGINX autoscale           : min=$NGINX_MIN_REPLICAS max=$NGINX_MAX_REPLICAS concurrency=$NGINX_HTTP_CONCURRENCY"
 
-          ensure_container_app \
-            "$SERVER_BASE" \
+          ensure_slot_container_app \
+            "$TARGET_SERVER_APP" \
             "$LOGIN_SERVER/server:${{ github.sha }}" \
             8080 \
             "$SERVER_MIN_REPLICAS" \
@@ -681,11 +906,12 @@ jobs:
             "$SERVER_HTTP_CONCURRENCY" \
             0.5 \
             1.0Gi \
-            APP_VERSION="${{ github.sha }}" \
+            internal \
+            APP_VERSION="${TARGET_SLOT}-${{ github.sha }}" \
             PORT=8080
 
-          ensure_container_app \
-            "$CLIENT_BASE" \
+          ensure_slot_container_app \
+            "$TARGET_CLIENT_APP" \
             "$LOGIN_SERVER/client:${{ github.sha }}" \
             3000 \
             "$CLIENT_MIN_REPLICAS" \
@@ -693,21 +919,17 @@ jobs:
             "$CLIENT_HTTP_CONCURRENCY" \
             0.5 \
             1.0Gi \
+            internal \
             PORT=3000
 
-          SERVER_FQDN=$(get_container_app_fqdn "$SERVER_BASE")
-          CLIENT_FQDN=$(get_container_app_fqdn "$CLIENT_BASE")
+          SAFE_SERVER="${TARGET_SERVER_APP//-/_}"
+          SAFE_CLIENT="${TARGET_CLIENT_APP//-/_}"
+          SERVER_FQDN_VAR="${SAFE_SERVER}_APP_FQDN"
+          CLIENT_FQDN_VAR="${SAFE_CLIENT}_APP_FQDN"
+          TARGET_SERVER_FQDN="${!SERVER_FQDN_VAR}"
+          TARGET_CLIENT_FQDN="${!CLIENT_FQDN_VAR}"
 
-          SAFE_SERVER="${SERVER_BASE//-/_}"
-          SAFE_CLIENT="${CLIENT_BASE//-/_}"
-          SERVER_REV_VAR="${SAFE_SERVER}_REV_FQDN"
-          CLIENT_REV_VAR="${SAFE_CLIENT}_REV_FQDN"
-
-          echo "Testing newly deployed Green revisions..."
-          smoke_url "Backend Container App" "https://${!SERVER_REV_VAR}/api/version"
-          smoke_url "Frontend Container App" "https://${!CLIENT_REV_VAR}"
-
-          ensure_container_app \
+          ensure_nginx_gateway_revision \
             "$NGINX_LABEL" \
             "$LOGIN_SERVER/nginx:${{ github.sha }}" \
             80 \
@@ -716,30 +938,39 @@ jobs:
             "$NGINX_HTTP_CONCURRENCY" \
             0.25 \
             0.5Gi \
-            PLATFORM=azure-container-apps \
+            ACTIVE_SLOT="$TARGET_SLOT" \
+            PLATFORM=azure-container-apps-bluegreen \
             RESOLVER_IP=168.63.129.16 \
-            BACKEND_UPSTREAM_URL="https://${SERVER_FQDN}" \
-            CLIENT_UPSTREAM_URL="https://${CLIENT_FQDN}"
+            BACKEND_UPSTREAM_URL="https://${TARGET_SERVER_FQDN}" \
+            CLIENT_UPSTREAM_URL="https://${TARGET_CLIENT_FQDN}"
 
           NGINX_FQDN=$(get_container_app_fqdn "$NGINX_LABEL")
           SAFE_NGINX="${NGINX_LABEL//-/_}"
           NGINX_REV_VAR="${SAFE_NGINX}_REV_FQDN"
-          smoke_url "NGINX Gateway Container App" "https://${!NGINX_REV_VAR}/health"
+          TARGET_NGINX_REV_FQDN="${!NGINX_REV_VAR}"
+
+          echo "Testing the freshly deployed ${TARGET_SLOT} slot through the new NGINX revision..."
+          smoke_url "NGINX Gateway Container App" "https://${TARGET_NGINX_REV_FQDN}/health"
+          smoke_url_contains "NGINX health reports target slot" "https://${TARGET_NGINX_REV_FQDN}/health" "${TARGET_SERVER_APP}"
+          smoke_url_contains "Backend version through NGINX" "https://${TARGET_NGINX_REV_FQDN}/api/version" "\"version\":\"${TARGET_SLOT}-${{ github.sha }}\""
+          smoke_url "Frontend through NGINX" "https://${TARGET_NGINX_REV_FQDN}/"
 
           echo ""
-          echo "All smoke tests passed on Green revisions!"
-          shift_traffic "$SERVER_BASE"
-          shift_traffic "$CLIENT_BASE"
-          shift_traffic "$NGINX_LABEL"
+          echo "All smoke tests passed on the ${TARGET_SLOT} slot."
+          shift_nginx_traffic
 
           echo ""
-          deactivate_old_revisions "$SERVER_BASE"
-          deactivate_old_revisions "$CLIENT_BASE"
           deactivate_old_revisions "$NGINX_LABEL"
+
+          delete_container_app_if_present "$PREVIOUS_SERVER_APP"
+          delete_container_app_if_present "$PREVIOUS_CLIENT_APP"
+          delete_container_app_if_present "$SERVER_BASE"
+          delete_container_app_if_present "$CLIENT_BASE"
 
           cleanup_legacy_aci
 
           echo "public_url=https://${NGINX_FQDN}" >> $GITHUB_OUTPUT
+          echo "active_slot=${TARGET_SLOT}" >> $GITHUB_OUTPUT
           echo "server_scale=${SERVER_MIN_REPLICAS}-${SERVER_MAX_REPLICAS}" >> $GITHUB_OUTPUT
           echo "client_scale=${CLIENT_MIN_REPLICAS}-${CLIENT_MAX_REPLICAS}" >> $GITHUB_OUTPUT
           echo "nginx_scale=${NGINX_MIN_REPLICAS}-${NGINX_MAX_REPLICAS}" >> $GITHUB_OUTPUT
@@ -747,6 +978,7 @@ jobs:
           echo ""
           echo "Deployment complete."
           echo "  Currently Deployed ACA Environment: $ACA_ENV_NAME"
+          echo "  Active slot     : ${TARGET_SLOT}"
           echo "  Public URL      : https://${NGINX_FQDN}"
           echo "  Server scale    : ${SERVER_MIN_REPLICAS}-${SERVER_MAX_REPLICAS}"
           echo "  Client scale    : ${CLIENT_MIN_REPLICAS}-${CLIENT_MAX_REPLICAS}"
@@ -763,7 +995,7 @@ jobs:
             exit 0
           fi
 
-          MESSAGE="\u2705 **Deployment Successful**\n\n**Commit:** \`${{ github.sha }}\`\n**Duration:** \`${DURATION} seconds\`\n**Server Scale:** \`${{ steps.deploy.outputs.server_scale }}\`\n**Client Scale:** \`${{ steps.deploy.outputs.client_scale }}\`\n**NGINX Scale:** \`${{ steps.deploy.outputs.nginx_scale }}\`\n**URL:** ${{ steps.deploy.outputs.public_url }}"
+          MESSAGE="\u2705 **Deployment Successful**\n\n**Commit:** \`${{ github.sha }}\`\n**Active Slot:** \`${{ steps.deploy.outputs.active_slot }}\`\n**Duration:** \`${DURATION} seconds\`\n**Server Scale:** \`${{ steps.deploy.outputs.server_scale }}\`\n**Client Scale:** \`${{ steps.deploy.outputs.client_scale }}\`\n**NGINX Scale:** \`${{ steps.deploy.outputs.nginx_scale }}\`\n**URL:** ${{ steps.deploy.outputs.public_url }}"
 
           curl -H "Content-Type: application/json" \
                -d "{\"content\": \"$MESSAGE\", \"text\": \"$MESSAGE\"}" \
