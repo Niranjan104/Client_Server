@@ -20,6 +20,18 @@ test("GET /metrics exposes Prometheus metrics", async () => {
   expect(res.text).toContain("tea_application_info");
 });
 
+test("GET /api/version exposes slot-friendly deployment metadata", async () => {
+  const res = await request(app).get("/api/version");
+
+  expect(res.statusCode).toBe(200);
+  expect(res.body).toEqual({
+    version: "dev",
+    slot: "dev",
+    displayVersion: "DEV",
+    build: null
+  });
+});
+
 test("POST /api/order rejects invalid quantities", async () => {
   const res = await request(app)
     .post("/api/order")

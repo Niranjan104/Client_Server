@@ -27,6 +27,7 @@ app.use((req, res, next) => {
 });
 
 const VERSION = process.env.APP_VERSION || "dev";
+const BUILD_SHA = process.env.APP_BUILD_SHA || "";
 const MAX_ORDER_LOGS = parseInteger(process.env.MAX_ORDER_LOGS, 500, 1);
 const ORDER_RESPONSE_DELAY_MS = parseInteger(
   process.env.ORDER_RESPONSE_DELAY_MS,
@@ -88,7 +89,14 @@ apiRouter.get("/health", (req, res) => {
 });
 
 apiRouter.get("/version", (req, res) => {
-  res.json({ version: VERSION });
+  const slot = getDeploymentSlot(VERSION);
+
+  res.json({
+    version: VERSION,
+    slot,
+    displayVersion: slot.toUpperCase(),
+    build: BUILD_SHA || null
+  });
 });
 
 apiRouter.get("/menu", (req, res) => {
@@ -310,4 +318,18 @@ function trimOrderLogs() {
 function syncUnpaidOrderMetric() {
   const unpaidOrderCount = orderLogs.filter((order) => order.status !== "Paid").length;
   setUnpaidOrders(VERSION, unpaidOrderCount);
+}
+
+function getDeploymentSlot(version) {
+  const normalizedVersion = String(version || "unknown").trim().toLowerCase();
+
+  if (normalizedVersion.startsWith("blue")) {
+    return "blue";
+  }
+
+  if (normalizedVersion.startsWith("green")) {
+    return "green";
+  }
+
+  return normalizedVersion || "unknown";
 }

@@ -907,7 +907,8 @@ jobs:
             0.5 \
             1.0Gi \
             internal \
-            APP_VERSION="${TARGET_SLOT}-${{ github.sha }}" \
+            APP_VERSION="${TARGET_SLOT}" \
+            APP_BUILD_SHA="${{ github.sha }}" \
             PORT=8080
 
           ensure_slot_container_app \
@@ -952,7 +953,8 @@ jobs:
           echo "Testing the freshly deployed ${TARGET_SLOT} slot through the new NGINX revision..."
           smoke_url "NGINX Gateway Container App" "https://${TARGET_NGINX_REV_FQDN}/health"
           smoke_url_contains "NGINX health reports target slot" "https://${TARGET_NGINX_REV_FQDN}/health" "${TARGET_SERVER_APP}"
-          smoke_url_contains "Backend version through NGINX" "https://${TARGET_NGINX_REV_FQDN}/api/version" "\"version\":\"${TARGET_SLOT}-${{ github.sha }}\""
+          smoke_url_contains "Backend slot through NGINX" "https://${TARGET_NGINX_REV_FQDN}/api/version" "\"version\":\"${TARGET_SLOT}\""
+          smoke_url_contains "Backend build through NGINX" "https://${TARGET_NGINX_REV_FQDN}/api/version" "\"build\":\"${{ github.sha }}\""
           smoke_url "Frontend through NGINX" "https://${TARGET_NGINX_REV_FQDN}/"
 
           echo ""

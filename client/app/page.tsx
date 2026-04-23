@@ -32,6 +32,7 @@ interface Bill {
 export default function Home() {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [serverVersion, setServerVersion] = useState("Detecting...");
+  const [serverBuild, setServerBuild] = useState("");
   const [orderStatus, setOrderStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -46,9 +47,11 @@ export default function Home() {
       try {
         const res = await fetch(`${API_BASE}/version`);
         const data = await res.json();
-        setServerVersion(data.version);
+        setServerVersion(String(data.slot || data.version || data.displayVersion || "unknown").toLowerCase());
+        setServerBuild(typeof data.build === "string" ? data.build.slice(0, 7).toUpperCase() : "");
       } catch {
         setServerVersion("Offline");
+        setServerBuild("");
       }
     };
 
@@ -342,10 +345,10 @@ export default function Home() {
         </div>
       )}
 
-      {/* Blue/Green Deployment Floating Indicator */}
+        {/* Blue/Green Deployment Floating Indicator */}
       <div className="fixed bottom-[100px] sm:bottom-6 right-6 flex flex-col items-end gap-2 z-50 pointer-events-none">
         <div className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-widest bg-white/90 px-2 py-1 rounded shadow-sm">
-          Active Backend Region
+          Active Backend Slot
         </div>
         <div className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-3 rounded-2xl shadow-xl backdrop-blur border text-white font-medium transition-colors duration-500 ${serverVersion.includes("blue") ? "bg-blue-600/90 border-blue-400" :
           serverVersion.includes("green") ? "bg-emerald-500/90 border-emerald-400" :
@@ -353,7 +356,12 @@ export default function Home() {
           }`}
         >
           <Server size={18} className={serverVersion !== "Offline" ? "animate-pulse" : ""} />
-          <span className="text-xs sm:text-sm">Env: <strong className=" tracking-wider">{serverVersion.toUpperCase()}</strong></span>
+          <div className="flex flex-col leading-tight">
+            <span className="text-xs sm:text-sm">Env: <strong className="tracking-wider">{serverVersion.toUpperCase()}</strong></span>
+            {serverBuild ? (
+              <span className="text-[10px] sm:text-xs text-white/80">Build: {serverBuild}</span>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

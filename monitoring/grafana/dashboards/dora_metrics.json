@@ -67,7 +67,7 @@
       },
       "targets": [
         {
-          "expr": "(0.005 + (0.035 * clamp_max(ci_deployment_duration_seconds{job=\"github_actions\"} / 900, 1)) + (0.045 * clamp_max(ci_deployment_modified_files{job=\"github_actions\"} / 60, 1)) + (0.020 * clamp_max(ci_deployment_complexity_score{job=\"github_actions\"} / 50, 1))) and on(job, run_id) topk(1, push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
+          "expr": "max((0.005 + (0.035 * clamp_max(ci_deployment_duration_seconds{job=\"github_actions\"} / 900, 1)) + (0.045 * clamp_max(ci_deployment_modified_files{job=\"github_actions\"} / 60, 1)) + (0.020 * clamp_max(ci_deployment_complexity_score{job=\"github_actions\"} / 50, 1))) and on(run_id) topk(1, max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))))",
           "legendFormat": "Latest run",
           "refId": "A"
         }
@@ -168,7 +168,7 @@
       },
       "targets": [
         {
-          "expr": "(0.005 + (0.035 * clamp_max(ci_deployment_duration_seconds{job=\"github_actions\"} / 900, 1)) + (0.045 * clamp_max(ci_deployment_modified_files{job=\"github_actions\"} / 60, 1)) + (0.020 * clamp_max(ci_deployment_complexity_score{job=\"github_actions\"} / 50, 1))) and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)",
+          "expr": "(0.005 + (0.035 * clamp_max(ci_deployment_duration_seconds{job=\"github_actions\"} / 900, 1)) + (0.045 * clamp_max(ci_deployment_modified_files{job=\"github_actions\"} / 60, 1)) + (0.020 * clamp_max(ci_deployment_complexity_score{job=\"github_actions\"} / 50, 1))) and on(run_id) max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
           "legendFormat": "Run {{run_id}}",
           "refId": "A"
         }
@@ -231,7 +231,7 @@
       },
       "targets": [
         {
-          "expr": "sum(ci_deployment_success_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)) / clamp_min(sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)), 1)",
+          "expr": "sum(ci_deployment_success_total{job=\"github_actions\"} and on(run_id) max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))) / clamp_min(sum(ci_deployment_count_total{job=\"github_actions\"} and on(run_id) max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))), 1)",
           "legendFormat": "Success rate",
           "refId": "A"
         }
@@ -296,7 +296,7 @@
       },
       "targets": [
         {
-          "expr": "sum(ci_deployment_duration_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)) / clamp_min(sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)), 1)",
+          "expr": "sum(ci_deployment_duration_seconds{job=\"github_actions\"} and on(run_id) max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))) / clamp_min(sum(ci_deployment_count_total{job=\"github_actions\"} and on(run_id) max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))), 1)",
           "legendFormat": "Average duration",
           "refId": "A"
         }
@@ -353,7 +353,7 @@
       },
       "targets": [
         {
-          "expr": "sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
+          "expr": "sum(ci_deployment_count_total{job=\"github_actions\"} and on(run_id) max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)))",
           "legendFormat": "Deployments",
           "refId": "A"
         }
@@ -418,7 +418,7 @@
       },
       "targets": [
         {
-          "expr": "sum(ci_deployment_modified_files{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)) / clamp_min(sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)), 1)",
+          "expr": "sum(ci_deployment_modified_files{job=\"github_actions\"} and on(run_id) max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))) / clamp_min(sum(ci_deployment_count_total{job=\"github_actions\"} and on(run_id) max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))), 1)",
           "legendFormat": "Average modified files",
           "refId": "A"
         }
@@ -487,17 +487,17 @@
       },
       "targets": [
         {
-          "expr": "clamp_max(ci_deployment_duration_seconds{job=\"github_actions\"} / 900, 1) and on(job, run_id) topk(1, push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
+          "expr": "max(clamp_max(ci_deployment_duration_seconds{job=\"github_actions\"} / 900, 1) and on(run_id) topk(1, max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))))",
           "legendFormat": "Duration risk",
           "refId": "A"
         },
         {
-          "expr": "clamp_max(ci_deployment_modified_files{job=\"github_actions\"} / 60, 1) and on(job, run_id) topk(1, push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
+          "expr": "max(clamp_max(ci_deployment_modified_files{job=\"github_actions\"} / 60, 1) and on(run_id) topk(1, max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))))",
           "legendFormat": "Change size risk",
           "refId": "B"
         },
         {
-          "expr": "clamp_max(ci_deployment_complexity_score{job=\"github_actions\"} / 50, 1) and on(job, run_id) topk(1, push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))",
+          "expr": "max(clamp_max(ci_deployment_complexity_score{job=\"github_actions\"} / 50, 1) and on(run_id) topk(1, max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))))",
           "legendFormat": "Complexity risk",
           "refId": "C"
         }
@@ -580,7 +580,7 @@
       },
       "targets": [
         {
-          "expr": "(sum(ci_deployment_count_total{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)) / clamp_min(sum(ci_deployment_duration_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s)), 1)) * 3600",
+          "expr": "(sum(ci_deployment_count_total{job=\"github_actions\"} and on(run_id) max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))) / clamp_min(sum(ci_deployment_duration_seconds{job=\"github_actions\"} and on(run_id) max by (run_id) (push_time_seconds{job=\"github_actions\"} and on(job, run_id) (time() - push_time_seconds{job=\"github_actions\"} < $__range_s))), 1)) * 3600",
           "legendFormat": "Deployments/hour",
           "refId": "A"
         }
