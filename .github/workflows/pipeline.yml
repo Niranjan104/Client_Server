@@ -331,10 +331,10 @@ jobs:
           \nBLUE_CLIENT_HOST=\"${CLIENT_BASE}-blue.centralindia.azurecontainer.io\"\
           \nGREEN_CLIENT_HOST=\"${CLIENT_BASE}-green.centralindia.azurecontainer.io\"\
           \n\necho \"Deploying new server image to ${SERVER_BASE}-${INACTIVE_COLOR} in background...\"\n( \
-          az container delete --name \"${SERVER_BASE}-${INACTIVE_COLOR}\" --resource-group \"$RG\" --yes 2>/dev/null || true \
+          az container delete --name \"${SERVER_BASE}-${INACTIVE_COLOR}\" --resource-group \"$RG\" --yes 2>/dev/null || true ;\
           az container create --name \"${SERVER_BASE}-${INACTIVE_COLOR}\" --resource-group \"$RG\" --location centralindia --os-type Linux --image \"$LOGIN_SERVER/server:${{ github.sha }}\" --registry-login-server \"$LOGIN_SERVER\" --registry-username \"$USERNAME\" --registry-password \"$PASSWORD\" --dns-name-label \"${SERVER_BASE}-${INACTIVE_COLOR}\" --ports 8080 --environment-variables APP_VERSION=\"$INACTIVE_COLOR\" PORT=\"8080\" --cpu 0.5 --memory 1 \
           ) &\n\necho \"Deploying new client image to ${CLIENT_BASE}-${INACTIVE_COLOR} in background...\"\n( \
-          az container delete --name \"${CLIENT_BASE}-${INACTIVE_COLOR}\" --resource-group \"$RG\" --yes 2>/dev/null || true \
+          az container delete --name \"${CLIENT_BASE}-${INACTIVE_COLOR}\" --resource-group \"$RG\" --yes 2>/dev/null || true ;\
           az container create --name \"${CLIENT_BASE}-${INACTIVE_COLOR}\" --resource-group \"$RG\" --location centralindia --os-type Linux --image \"$LOGIN_SERVER/client:${{ github.sha }}\" --registry-login-server \"$LOGIN_SERVER\" --registry-username \"$USERNAME\" --registry-password \"$PASSWORD\" --dns-name-label \"${CLIENT_BASE}-${INACTIVE_COLOR}\" --ports 3000 --cpu 0.5 --memory 1 \
           ) &\n\necho \"Waiting for background deployments to hit Azure...\"\nwait\n\nINACTIVE_SERVER_URL=\"http://${SERVER_BASE}-${INACTIVE_COLOR}.centralindia.azurecontainer.io:8080/api/version\"\
           \nINACTIVE_CLIENT_URL=\"http://${CLIENT_BASE}-${INACTIVE_COLOR}.centralindia.azurecontainer.io:3000\"\
