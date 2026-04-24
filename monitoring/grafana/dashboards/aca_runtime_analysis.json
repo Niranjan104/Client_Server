@@ -120,10 +120,74 @@
             "metricNamespace": "Microsoft.App/containerApps",
             "timeGrain": "auto",
             "resources": [
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "A",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "B",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "C",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "D",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
               { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
             ]
           },
@@ -131,7 +195,8 @@
             "type": "grafana-azure-monitor-datasource",
             "uid": "azure-monitor"
           },
-          "refId": "A"
+          "refId": "E",
+          "hide": false
         }
       ],
       "title": "Current Running Replicas",
@@ -375,10 +440,74 @@
             "metricNamespace": "Microsoft.App/containerApps",
             "timeGrain": "auto",
             "resources": [
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "A",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "B",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "C",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "D",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
               { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
             ]
           },
@@ -386,7 +515,8 @@
             "type": "grafana-azure-monitor-datasource",
             "uid": "azure-monitor"
           },
-          "refId": "A"
+          "refId": "E",
+          "hide": false
         }
       ],
       "title": "Incoming Traffic by Container App",
@@ -462,10 +592,74 @@
             "metricNamespace": "Microsoft.App/containerApps",
             "timeGrain": "auto",
             "resources": [
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "A",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "B",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "C",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "D",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
               { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
             ]
           },
@@ -473,7 +667,8 @@
             "type": "grafana-azure-monitor-datasource",
             "uid": "azure-monitor"
           },
-          "refId": "A"
+          "refId": "E",
+          "hide": false
         }
       ],
       "title": "Replica Count Trend",
@@ -545,10 +740,74 @@
             "metricNamespace": "Microsoft.App/containerApps",
             "timeGrain": "auto",
             "resources": [
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "A",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "B",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "C",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "D",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
               { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
             ]
           },
@@ -556,7 +815,8 @@
             "type": "grafana-azure-monitor-datasource",
             "uid": "azure-monitor"
           },
-          "refId": "A"
+          "refId": "E",
+          "hide": false
         }
       ],
       "title": "CPU Usage",
@@ -628,10 +888,74 @@
             "metricNamespace": "Microsoft.App/containerApps",
             "timeGrain": "auto",
             "resources": [
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "A",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "B",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "C",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "D",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
               { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
             ]
           },
@@ -639,7 +963,8 @@
             "type": "grafana-azure-monitor-datasource",
             "uid": "azure-monitor"
           },
-          "refId": "A"
+          "refId": "E",
+          "hide": false
         }
       ],
       "title": "Memory Working Set",
@@ -713,10 +1038,74 @@
             "metricNamespace": "Microsoft.App/containerApps",
             "timeGrain": "auto",
             "resources": [
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
-              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "A",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "B",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "C",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" }
+            ]
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor"
+          },
+          "refId": "D",
+          "hide": false
+        },
+        {
+          "azureMonitor": {
+            "aggregation": "Maximum",
+            "metricName": "Replicas",
+            "metricNamespace": "Microsoft.App/containerApps",
+            "timeGrain": "auto",
+            "resources": [
               { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
             ]
           },
@@ -724,7 +1113,8 @@
             "type": "grafana-azure-monitor-datasource",
             "uid": "azure-monitor"
           },
-          "refId": "A"
+          "refId": "E",
+          "hide": false
         }
       ],
       "title": "Restart Count",
