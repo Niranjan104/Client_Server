@@ -7,8 +7,8 @@ datasources:
     isDefault: false
     jsonData:
       azureAuthType: clientsecret
-      tenantId: ${AZURE_TENANT_ID}
-      clientId: ${AZURE_CLIENT_ID}
-      subscriptionId: ${AZURE_SUBSCRIPTION_ID}
+      tenantId: ${arm_tenant_id}
+      clientId: ${arm_client_id}
+      subscriptionId: ${arm_subscription_id}
     secureJsonData:
-      clientSecret: ${AZURE_CLIENT_SECRET}
+      clientSecret: ${arm_client_secret}

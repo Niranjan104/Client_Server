@@ -125,19 +125,18 @@ resource "azurerm_container_group" "monitoring" {
       PROMETHEUS_URL             = "http://localhost:9090"
     }
 
-    secure_environment_variables = {
-      AZURE_TENANT_ID       = var.arm_tenant_id
-      AZURE_CLIENT_ID       = var.arm_client_id
-      AZURE_CLIENT_SECRET   = var.arm_client_secret
-      AZURE_SUBSCRIPTION_ID = var.arm_subscription_id
-    }
 
     volume {
       name       = "grafana-datasources"
       mount_path = "/etc/grafana/provisioning/datasources"
       secret = {
         "datasource.yml"    = base64encode(file("${path.module}/../monitoring/grafana/provisioning/datasources/datasource.yml"))
-        "azure_monitor.yml" = base64encode(file("${path.module}/../monitoring/grafana/provisioning/datasources/azure_monitor.yml"))
+        "azure_monitor.yml" = base64encode(templatefile("${path.module}/../monitoring/grafana/provisioning/datasources/azure_monitor.yml", {
+          arm_tenant_id       = var.arm_tenant_id
+          arm_client_id       = var.arm_client_id
+          arm_client_secret   = var.arm_client_secret
+          arm_subscription_id = var.arm_subscription_id
+        }))
       }
     }
 
