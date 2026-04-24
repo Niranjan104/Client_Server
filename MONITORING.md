@@ -3,7 +3,6 @@
 This repository exposes local application metrics and deployment analytics through a split setup:
 
 - Local Docker monitoring: Prometheus + Grafana + cAdvisor + NGINX exporter
-- Cloud runtime monitoring: Azure Container Apps metrics and logs through Azure Monitor / Log Analytics
 - Deployment analytics: Pushgateway-backed DORA-style dashboard in Grafana
 
 ## Local Monitoring
@@ -30,7 +29,6 @@ Pre-provisioned dashboards:
 - `Docker System Metrics (Local Compose)`
 - `Application Observability (Local Compose)`
 - `Quantitative Performance Analysis (DORA)`
-- `Azure Container Apps Runtime Analysis`
 
 What is scraped locally:
 
@@ -68,18 +66,11 @@ The DORA dashboard is for deployment-risk analytics only. Panels such as `Latest
 
 ## Azure Monitoring
 
-The application runtime now runs on Azure Container Apps. For production runtime health, use the Azure Portal Container App metrics and the Log Analytics workspace created by Terraform:
+The application runtime still runs on Azure Container Apps, but Azure-specific runtime dashboards are no longer provisioned in Grafana. For production runtime health, use the Azure Portal Container App metrics and the Log Analytics workspace created by Terraform:
 
 - `server-*-blue` and `server-*-green` Container Apps: backend slot replica count, requests, CPU, memory, and logs
 - `client-*-blue` and `client-*-green` Container Apps: frontend slot replica count, requests, CPU, memory, and logs
 - `nginx` Container App: stable gateway replica count, ingress requests, CPU, memory, and logs
-
-The `Azure Container Apps Runtime Analysis` dashboard combines:
-
-- live Azure Monitor metrics for incoming requests, replica count, CPU, memory, and restarts
-- Prometheus runtime-state metadata for active slot, build number, SHA, active app names, and configured scale limits
-
-This makes it the main dashboard to inspect traffic handling, autoscaling behavior, configured replica ceilings, and the currently live build.
 
 ## How To Test
 
@@ -92,21 +83,16 @@ To verify blue-green cutover without downtime:
 
 To verify autoscaling under load:
 
-1. Open the `Azure Container Apps Runtime Analysis` dashboard in Grafana.
+1. Open the Azure Portal metrics view for the active Container App or the stable `nginx` gateway.
 2. Generate sustained traffic:
    `.\scripts\load_test.ps1 -BaseUrl https://<your-nginx-url> -Path /api/menu -Concurrency 60 -DurationSeconds 300`
-3. Watch these panels during the run:
-   `Incoming Traffic by Container App`
-   `Current Running Replicas`
-   `Replica Count Trend`
-   `Configured Max Replicas`
+3. Watch replica count, requests, CPU, and memory charts during the run.
 
 Expected behavior:
 
 - traffic should stay on the stable `nginx` URL during deployment
 - the active slot should change only after smoke tests pass
 - current replicas should increase under sustained traffic but stay below the configured max values
-- the metadata table should update to the new slot, SHA, and build number after a successful rollout
 
 The cloud Prometheus/Pushgateway/Grafana monitoring group remains on ACI for deployment analytics. The cloud Prometheus configuration intentionally scrapes only:
 
@@ -114,3 +100,14 @@ The cloud Prometheus/Pushgateway/Grafana monitoring group remains on ACI for dep
 - `localhost:9091` for Pushgateway
 
 This avoids false-down scrape targets in cloud environments where local Docker-only exporters such as `cadvisor` and `nginx_exporter` do not exist.
+
+## Quick Local Traffic Check
+
+If the local application dashboards are empty right after boot, generate a little traffic first:
+
+```bash
+curl.exe http://localhost/api/menu
+curl.exe -X POST http://localhost/api/order -H "Content-Type: application/json" -d "{\"customerName\":\"Grafana\",\"cart\":[{\"itemId\":1,\"quantity\":2}]}"
+```
+
+The DORA dashboard only fills after a GitHub Actions deployment run pushes metrics into Pushgateway.

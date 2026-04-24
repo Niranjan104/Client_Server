@@ -15,14 +15,6 @@ terraform {
   }
 }
 
-variable "arm_client_id" { type = string }
-variable "arm_client_secret" {
-  type      = string
-  sensitive = true
-}
-variable "arm_tenant_id" { type = string }
-variable "arm_subscription_id" { type = string }
-
 provider "azurerm" {
   features {}
 }
@@ -130,13 +122,7 @@ resource "azurerm_container_group" "monitoring" {
       name       = "grafana-datasources"
       mount_path = "/etc/grafana/provisioning/datasources"
       secret = {
-        "datasource.yml"    = base64encode(file("${path.module}/../monitoring/grafana/provisioning/datasources/datasource.yml"))
-        "azure_monitor.yml" = base64encode(templatefile("${path.module}/../monitoring/grafana/provisioning/datasources/azure_monitor.yml", {
-          arm_tenant_id       = var.arm_tenant_id
-          arm_client_id       = var.arm_client_id
-          arm_client_secret   = var.arm_client_secret
-          arm_subscription_id = var.arm_subscription_id
-        }))
+        "datasource.yml" = base64encode(file("${path.module}/../monitoring/grafana/provisioning/datasources/datasource.yml"))
       }
     }
 
@@ -152,20 +138,6 @@ resource "azurerm_container_group" "monitoring" {
       name       = "grafana-dashboard-jsons"
       mount_path = "/var/lib/grafana/dashboards"
       secret = {
-        "azure_aci.json" = base64encode(templatefile("${path.module}/../monitoring/grafana/dashboards/azure_aci.json", {
-          sub_id      = var.arm_subscription_id
-          rg_name     = data.azurerm_resource_group.rg.name
-          server_base = var.server_name
-          client_base = var.client_name
-          nginx_base  = var.nginx_dns_label
-        }))
-        "aca_runtime_analysis.json" = base64encode(templatefile("${path.module}/../monitoring/grafana/dashboards/aca_runtime_analysis.json", {
-          sub_id      = var.arm_subscription_id
-          rg_name     = data.azurerm_resource_group.rg.name
-          server_base = var.server_name
-          client_base = var.client_name
-          nginx_base  = var.nginx_dns_label
-        }))
         "dora_metrics.json" = base64encode(file("${path.module}/../monitoring/grafana/dashboards/dora_metrics.json"))
       }
     }

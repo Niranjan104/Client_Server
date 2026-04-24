@@ -144,9 +144,9 @@ Since this architecture uses Azure Container Apps, replica count, CPU, memory, r
    * Go to the **Actions** tab on your GitHub Repository.
    * Click on the latest workflow run. The UI shows validation, scanning, image build, Container Apps deployment, smoke tests, and DORA metric publishing.
 
-4. **Where to track live traffic, scaling, slot, and build metadata?**
-   * Open Grafana and use the `Azure Container Apps Runtime Analysis` dashboard.
-   * It shows active slot/build/SHA metadata, current running replicas, configured min/max replica settings, traffic, CPU, memory, and restarts for the live Container Apps.
+4. **Where to track deployment analytics in Grafana?**
+   * Open Grafana and use the `Quantitative Performance Analysis (DORA)` dashboard.
+   * It shows deployment duration, change size, success rate, and risk-oriented CI/CD metrics pushed from GitHub Actions.
 
 ---
 

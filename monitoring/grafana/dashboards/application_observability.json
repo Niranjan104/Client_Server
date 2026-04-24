@@ -15,8 +15,8 @@
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "up{job=\"tea_server\"}",
-          "legendFormat": "{{instance}}"
+          "expr": "max by (slot) (up{job=\"tea_server\"})",
+          "legendFormat": "{{slot}}"
         }
       ],
       "gridPos": {
@@ -49,8 +49,8 @@
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(tea_http_request_duration_seconds_bucket{route!=\"/metrics\"}[5m])))",
-          "legendFormat": "{{route}}"
+          "expr": "histogram_quantile(0.95, sum by (le, route, app_version) (rate(tea_http_request_duration_seconds_bucket{route!=\"/metrics\"}[5m])))",
+          "legendFormat": "{{app_version}} {{route}}"
         }
       ],
       "gridPos": {

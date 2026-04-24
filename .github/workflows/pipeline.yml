@@ -285,11 +285,7 @@ jobs:
             -var="nginx_dns_label=$NGINX_LABEL" \
             -var="container_app_environment_name=$ACA_ENV_NAME" \
             -var="log_analytics_workspace_name=$LAW_NAME" \
-            -var="tf_state_storage_account=$TF_STATE_ACCOUNT" \
-            -var="arm_client_id=$ARM_CLIENT_ID" \
-            -var="arm_client_secret=$ARM_CLIENT_SECRET" \
-            -var="arm_tenant_id=$ARM_TENANT_ID" \
-            -var="arm_subscription_id=$ARM_SUBSCRIPTION_ID"
+            -var="tf_state_storage_account=$TF_STATE_ACCOUNT"
 
       - name: Resolve ACR Credentials
         run: |
@@ -328,10 +324,6 @@ jobs:
             -var="container_app_environment_name=$ACA_ENV_NAME" \
             -var="log_analytics_workspace_name=$LAW_NAME" \
             -var="tf_state_storage_account=$TF_STATE_ACCOUNT" \
-            -var="arm_client_id=$ARM_CLIENT_ID" \
-            -var="arm_client_secret=$ARM_CLIENT_SECRET" \
-            -var="arm_tenant_id=$ARM_TENANT_ID" \
-            -var="arm_subscription_id=$ARM_SUBSCRIPTION_ID" \
             -out=tfplan
 
       - name: Terraform Apply
@@ -1023,28 +1015,6 @@ jobs:
         run: |
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - DEPLOY_START_TIME))
-          DEPLOYED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-
-          SERVER_MIN_REPLICAS=$(echo "${{ vars.SERVER_MIN_REPLICAS }}" | tr -d '\r\n')
-          SERVER_MAX_REPLICAS=$(echo "${{ vars.SERVER_MAX_REPLICAS }}" | tr -d '\r\n')
-          SERVER_HTTP_CONCURRENCY=$(echo "${{ vars.SERVER_HTTP_CONCURRENCY }}" | tr -d '\r\n')
-          CLIENT_MIN_REPLICAS=$(echo "${{ vars.CLIENT_MIN_REPLICAS }}" | tr -d '\r\n')
-          CLIENT_MAX_REPLICAS=$(echo "${{ vars.CLIENT_MAX_REPLICAS }}" | tr -d '\r\n')
-          CLIENT_HTTP_CONCURRENCY=$(echo "${{ vars.CLIENT_HTTP_CONCURRENCY }}" | tr -d '\r\n')
-          NGINX_MIN_REPLICAS=$(echo "${{ vars.NGINX_MIN_REPLICAS }}" | tr -d '\r\n')
-          NGINX_MAX_REPLICAS=$(echo "${{ vars.NGINX_MAX_REPLICAS }}" | tr -d '\r\n')
-          NGINX_HTTP_CONCURRENCY=$(echo "${{ vars.NGINX_HTTP_CONCURRENCY }}" | tr -d '\r\n')
-
-          SERVER_MIN_REPLICAS=${SERVER_MIN_REPLICAS:-0}
-          SERVER_MAX_REPLICAS=${SERVER_MAX_REPLICAS:-10}
-          SERVER_HTTP_CONCURRENCY=${SERVER_HTTP_CONCURRENCY:-50}
-          CLIENT_MIN_REPLICAS=${CLIENT_MIN_REPLICAS:-0}
-          CLIENT_MAX_REPLICAS=${CLIENT_MAX_REPLICAS:-5}
-          CLIENT_HTTP_CONCURRENCY=${CLIENT_HTTP_CONCURRENCY:-80}
-          NGINX_MIN_REPLICAS=${NGINX_MIN_REPLICAS:-1}
-          NGINX_MAX_REPLICAS=${NGINX_MAX_REPLICAS:-5}
-          NGINX_HTTP_CONCURRENCY=${NGINX_HTTP_CONCURRENCY:-100}
 
           # x1: Build duration
           X1=$DURATION
@@ -1102,7 +1072,6 @@ jobs:
 
           LEGACY_PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/github_actions"
           PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/github_actions/run_id/${{ github.run_id }}"
-          RUNTIME_PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/aca_runtime_state/environment/live"
 
           # Retry push up to 5 times (pushgateway might just be booting up)
           {
@@ -1130,51 +1099,3 @@ jobs:
               sleep 10
             fi
           done
-
-          if [ "$JOB_STATUS" = "success" ]; then
-            ACTIVE_SLOT=$(echo "${{ steps.deploy.outputs.active_slot }}" | tr -d '\r\n')
-            SERVER_BASE=$(echo "${{ secrets.SERVER_BASE_NAME }}" | tr -d '\r\n')
-            CLIENT_BASE=$(echo "${{ secrets.CLIENT_BASE_NAME }}" | tr -d '\r\n')
-            NGINX_LABEL=$(echo "${{ secrets.NGINX_DNS_LABEL }}" | tr -d '\r\n')
-            PUBLIC_URL=$(echo "${{ steps.deploy.outputs.public_url }}" | tr -d '\r\n')
-            BUILD_NUMBER="${{ github.run_number }}"
-            BUILD_ATTEMPT="${{ github.run_attempt }}"
-
-            {
-              printf 'ci_runtime_release_info{slot="%s",version="%s",sha="%s",short_sha="%s",run_id="%s",run_number="%s",run_attempt="%s",server_app="%s",client_app="%s",nginx_app="%s",public_url="%s",deployed_at="%s"} 1\n' \
-                "$ACTIVE_SLOT" \
-                "$ACTIVE_SLOT" \
-                "${{ github.sha }}" \
-                "$SHORT_SHA" \
-                "${{ github.run_id }}" \
-                "$BUILD_NUMBER" \
-                "$BUILD_ATTEMPT" \
-                "${SERVER_BASE}-${ACTIVE_SLOT}" \
-                "${CLIENT_BASE}-${ACTIVE_SLOT}" \
-                "$NGINX_LABEL" \
-                "$PUBLIC_URL" \
-                "$DEPLOYED_AT"
-              printf 'ci_runtime_scale_min{component="server"} %s\n' "$SERVER_MIN_REPLICAS"
-              printf 'ci_runtime_scale_max{component="server"} %s\n' "$SERVER_MAX_REPLICAS"
-              printf 'ci_runtime_http_concurrency{component="server"} %s\n' "$SERVER_HTTP_CONCURRENCY"
-              printf 'ci_runtime_scale_min{component="client"} %s\n' "$CLIENT_MIN_REPLICAS"
-              printf 'ci_runtime_scale_max{component="client"} %s\n' "$CLIENT_MAX_REPLICAS"
-              printf 'ci_runtime_http_concurrency{component="client"} %s\n' "$CLIENT_HTTP_CONCURRENCY"
-              printf 'ci_runtime_scale_min{component="nginx"} %s\n' "$NGINX_MIN_REPLICAS"
-              printf 'ci_runtime_scale_max{component="nginx"} %s\n' "$NGINX_MAX_REPLICAS"
-              printf 'ci_runtime_http_concurrency{component="nginx"} %s\n' "$NGINX_HTTP_CONCURRENCY"
-              printf 'ci_runtime_deployment_duration_seconds %s\n' "$DURATION"
-              printf 'ci_runtime_deployment_timestamp_seconds %s\n' "$END_TIME"
-            } > runtime_metrics.txt
-
-            for i in 1 2 3 4 5; do
-              echo "Attempt $i to push runtime state metrics..."
-              if curl -f -X PUT --data-binary @runtime_metrics.txt "$RUNTIME_PUSHGATEWAY_URL"; then
-                echo "Successfully pushed runtime state metrics to $RUNTIME_PUSHGATEWAY_URL"
-                break
-              else
-                echo "Runtime state push failed. Waiting 10s..."
-                sleep 10
-              fi
-            done
-          fi
