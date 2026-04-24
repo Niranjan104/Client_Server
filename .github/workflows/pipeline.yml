@@ -1105,21 +1105,19 @@ jobs:
           RUNTIME_PUSHGATEWAY_URL="http://monitoring-teastall.centralindia.azurecontainer.io:9091/metrics/job/aca_runtime_state/environment/live"
 
           # Retry push up to 5 times (pushgateway might just be booting up)
-          METRICS_PAYLOAD=$(cat <<EOF
-          ci_deployment_duration_seconds $X1
-          ci_deployment_modified_files $X2
-          ci_deployment_test_failure $X3
-          ci_deployment_complexity_score $XN
-          ci_deployment_duration_risk_ratio $DURATION_RISK
-          ci_deployment_change_risk_ratio $CHANGE_RISK
-          ci_deployment_complexity_risk_ratio $COMPLEXITY_RISK
-          ci_deployment_failure_probability $PROBABILITY
-          ci_deployment_success_total $SUCCESS_VAL
-          ci_deployment_count_total 1
-          EOF
-          )
+          {
+            printf 'ci_deployment_duration_seconds %s\n' "$X1"
+            printf 'ci_deployment_modified_files %s\n' "$X2"
+            printf 'ci_deployment_test_failure %s\n' "$X3"
+            printf 'ci_deployment_complexity_score %s\n' "$XN"
+            printf 'ci_deployment_duration_risk_ratio %s\n' "$DURATION_RISK"
+            printf 'ci_deployment_change_risk_ratio %s\n' "$CHANGE_RISK"
+            printf 'ci_deployment_complexity_risk_ratio %s\n' "$COMPLEXITY_RISK"
+            printf 'ci_deployment_failure_probability %s\n' "$PROBABILITY"
+            printf 'ci_deployment_success_total %s\n' "$SUCCESS_VAL"
+            printf 'ci_deployment_count_total 1\n'
+          } > metrics.txt
 
-          echo "$METRICS_PAYLOAD" > metrics.txt
           curl -s -X DELETE "$LEGACY_PUSHGATEWAY_URL" >/dev/null || true
 
           for i in 1 2 3 4 5; do
@@ -1142,23 +1140,32 @@ jobs:
             BUILD_NUMBER="${{ github.run_number }}"
             BUILD_ATTEMPT="${{ github.run_attempt }}"
 
-            RUNTIME_PAYLOAD=$(cat <<EOF
-            ci_runtime_release_info{slot="$ACTIVE_SLOT",version="$ACTIVE_SLOT",sha="${{ github.sha }}",short_sha="$SHORT_SHA",run_id="${{ github.run_id }}",run_number="$BUILD_NUMBER",run_attempt="$BUILD_ATTEMPT",server_app="${SERVER_BASE}-${ACTIVE_SLOT}",client_app="${CLIENT_BASE}-${ACTIVE_SLOT}",nginx_app="$NGINX_LABEL",public_url="$PUBLIC_URL",deployed_at="$DEPLOYED_AT"} 1
-            ci_runtime_scale_min{component="server"} $SERVER_MIN_REPLICAS
-            ci_runtime_scale_max{component="server"} $SERVER_MAX_REPLICAS
-            ci_runtime_http_concurrency{component="server"} $SERVER_HTTP_CONCURRENCY
-            ci_runtime_scale_min{component="client"} $CLIENT_MIN_REPLICAS
-            ci_runtime_scale_max{component="client"} $CLIENT_MAX_REPLICAS
-            ci_runtime_http_concurrency{component="client"} $CLIENT_HTTP_CONCURRENCY
-            ci_runtime_scale_min{component="nginx"} $NGINX_MIN_REPLICAS
-            ci_runtime_scale_max{component="nginx"} $NGINX_MAX_REPLICAS
-            ci_runtime_http_concurrency{component="nginx"} $NGINX_HTTP_CONCURRENCY
-            ci_runtime_deployment_duration_seconds $DURATION
-            ci_runtime_deployment_timestamp_seconds $END_TIME
-            EOF
-            )
-
-            echo "$RUNTIME_PAYLOAD" > runtime_metrics.txt
+            {
+              printf 'ci_runtime_release_info{slot="%s",version="%s",sha="%s",short_sha="%s",run_id="%s",run_number="%s",run_attempt="%s",server_app="%s",client_app="%s",nginx_app="%s",public_url="%s",deployed_at="%s"} 1\n' \
+                "$ACTIVE_SLOT" \
+                "$ACTIVE_SLOT" \
+                "${{ github.sha }}" \
+                "$SHORT_SHA" \
+                "${{ github.run_id }}" \
+                "$BUILD_NUMBER" \
+                "$BUILD_ATTEMPT" \
+                "${SERVER_BASE}-${ACTIVE_SLOT}" \
+                "${CLIENT_BASE}-${ACTIVE_SLOT}" \
+                "$NGINX_LABEL" \
+                "$PUBLIC_URL" \
+                "$DEPLOYED_AT"
+              printf 'ci_runtime_scale_min{component="server"} %s\n' "$SERVER_MIN_REPLICAS"
+              printf 'ci_runtime_scale_max{component="server"} %s\n' "$SERVER_MAX_REPLICAS"
+              printf 'ci_runtime_http_concurrency{component="server"} %s\n' "$SERVER_HTTP_CONCURRENCY"
+              printf 'ci_runtime_scale_min{component="client"} %s\n' "$CLIENT_MIN_REPLICAS"
+              printf 'ci_runtime_scale_max{component="client"} %s\n' "$CLIENT_MAX_REPLICAS"
+              printf 'ci_runtime_http_concurrency{component="client"} %s\n' "$CLIENT_HTTP_CONCURRENCY"
+              printf 'ci_runtime_scale_min{component="nginx"} %s\n' "$NGINX_MIN_REPLICAS"
+              printf 'ci_runtime_scale_max{component="nginx"} %s\n' "$NGINX_MAX_REPLICAS"
+              printf 'ci_runtime_http_concurrency{component="nginx"} %s\n' "$NGINX_HTTP_CONCURRENCY"
+              printf 'ci_runtime_deployment_duration_seconds %s\n' "$DURATION"
+              printf 'ci_runtime_deployment_timestamp_seconds %s\n' "$END_TIME"
+            } > runtime_metrics.txt
 
             for i in 1 2 3 4 5; do
               echo "Attempt $i to push runtime state metrics..."
