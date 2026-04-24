@@ -47,11 +47,11 @@
             "metricNamespace": "Microsoft.App/containerApps",
             "timeGrain": "auto",
             "resources": [
-              { "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
             ]
           },
           "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
@@ -115,11 +115,11 @@
             "metricNamespace": "Microsoft.App/containerApps",
             "timeGrain": "auto",
             "resources": [
-              { "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
             ]
           },
           "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
@@ -178,11 +178,11 @@
             "metricNamespace": "Microsoft.App/containerApps",
             "timeGrain": "auto",
             "resources": [
-              { "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
             ]
           },
           "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
@@ -241,11 +241,11 @@
             "metricNamespace": "Microsoft.App/containerApps",
             "timeGrain": "auto",
             "resources": [
-              { "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
             ]
           },
           "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
@@ -303,11 +303,11 @@
             "metricNamespace": "Microsoft.App/containerApps",
             "timeGrain": "auto",
             "resources": [
-              { "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
             ]
           },
           "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },
@@ -366,11 +366,11 @@
             "metricNamespace": "Microsoft.App/containerApps",
             "timeGrain": "auto",
             "resources": [
-              { "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
-              { "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-blue" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${server_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-blue" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${client_base}-green" },
+              { "subscription": "${sub_id}", "resourceGroup": "${rg_name}", "resourceName": "${nginx_base}" }
             ]
           },
           "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor" },

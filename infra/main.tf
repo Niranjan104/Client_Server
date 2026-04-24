@@ -154,12 +154,14 @@ resource "azurerm_container_group" "monitoring" {
       mount_path = "/var/lib/grafana/dashboards"
       secret = {
         "azure_aci.json" = base64encode(templatefile("${path.module}/../monitoring/grafana/dashboards/azure_aci.json", {
+          sub_id      = var.arm_subscription_id
           rg_name     = data.azurerm_resource_group.rg.name
           server_base = var.server_name
           client_base = var.client_name
           nginx_base  = var.nginx_dns_label
         }))
         "aca_runtime_analysis.json" = base64encode(templatefile("${path.module}/../monitoring/grafana/dashboards/aca_runtime_analysis.json", {
+          sub_id      = var.arm_subscription_id
           rg_name     = data.azurerm_resource_group.rg.name
           server_base = var.server_name
           client_base = var.client_name
