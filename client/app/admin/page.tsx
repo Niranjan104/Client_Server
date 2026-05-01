@@ -78,7 +78,7 @@ export default function AdminPage() {
                         <h1 className="text-2xl font-bold tracking-tight">Admin Portal</h1>
                     </div>
                     <button onClick={fetchLogs} className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-bold text-sm shadow-sm transition-colors">
-                        Refresh Feed
+                        Refresh Feeds
                     </button>
                 </div>
             </header>
@@ -98,7 +98,7 @@ export default function AdminPage() {
                     <div className="flex justify-center py-20 text-orange-500"><Loader2 className="animate-spin" size={48} /></div>
                 ) : orderLogs.length === 0 ? (
                     <div className="text-center py-20 text-gray-500 bg-white rounded-2xl border-2 border-dashed border-gray-200 font-medium shadow-sm">
-                        No orders have been placed yet.
+                        No orders have been placed yet...
                     </div>
                 ) : (
                     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-8">

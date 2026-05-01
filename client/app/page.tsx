@@ -267,7 +267,7 @@ export default function Home() {
                 onClick={() => { setBill(null); setOrderStatus(""); }}
                 className="mt-8 w-full py-3.5 bg-orange-100 hover:bg-orange-200 text-orange-800 font-bold rounded-xl transition-colors active:scale-95 text-lg shadow-sm"
               >
-                Start New Order
+                Start New Order🍔
               </button>
             </div>
           </div>

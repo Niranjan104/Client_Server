@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tea Stall",
-  description: "New Tea stall app",
+  title: "Capstone test app",
+  description: "Capstone test app by Niranjan.",
 };
 
 export default function RootLayout({
