@@ -207,7 +207,7 @@ export default function Home() {
             </div>
             <div className="p-6">
               <p className="text-center text-gray-500 text-sm mb-6">
-                Waiting for the Admin to approve your payment....
+                Waiting for the Admin to approve your payment...
               </p>
               <div className="w-full py-3.5 bg-gray-100 text-gray-500 font-bold rounded-xl flex items-center justify-center gap-2 shadow-inner text-lg">
                 <Loader2 size={20} className="animate-spin" /> Polling Server...
@@ -267,7 +267,7 @@ export default function Home() {
                 onClick={() => { setBill(null); setOrderStatus(""); }}
                 className="mt-8 w-full py-3.5 bg-orange-100 hover:bg-orange-200 text-orange-800 font-bold rounded-xl transition-colors active:scale-95 text-lg shadow-sm"
               >
-                Start New Order🍔
+                Start New Order
               </button>
             </div>
           </div>

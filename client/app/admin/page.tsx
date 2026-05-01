@@ -141,7 +141,7 @@ export default function AdminPage() {
                                         </button>
                                     ) : (
                                         <div className="w-full mt-auto py-3 px-4 bg-gray-100 text-gray-400 font-bold rounded-xl flex items-center justify-center gap-2 border border-gray-200">
-                                            <CheckCircle size={18} /> Payment Verified
+                                            <CheckCircle size={18} /> Payment Verified.
                                         </div>
                                     )}
                                 </div>
