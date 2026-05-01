@@ -180,7 +180,7 @@ export default function Home() {
           <div className="text-center mb-10">
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4">Fresh & Authentic Beverages</h2>
             <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto">
-              Add items to your cart, and experience our cloud-native simulated checkout flow powered by Azure Container Instances.
+              Add items to your cart and experience our cloud-native simulated checkout flow powered by Azure Container Instances.
             </p>
           </div>
         )}
@@ -207,7 +207,7 @@ export default function Home() {
             </div>
             <div className="p-6">
               <p className="text-center text-gray-500 text-sm mb-6">
-                Waiting for the Admin to approve your payment...
+                Waiting for the Admin to approve your payment....
               </p>
               <div className="w-full py-3.5 bg-gray-100 text-gray-500 font-bold rounded-xl flex items-center justify-center gap-2 shadow-inner text-lg">
                 <Loader2 size={20} className="animate-spin" /> Polling Server...
@@ -345,7 +345,7 @@ export default function Home() {
         </div>
       )}
 
-        {/* Blue/Green Deployment Floating Indicator */}
+      {/* Blue/Green Deployment Floating Indicator */}
       <div className="fixed bottom-[100px] sm:bottom-6 right-6 flex flex-col items-end gap-2 z-50 pointer-events-none">
         <div className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-widest bg-white/90 px-2 py-1 rounded shadow-sm">
           Active Backend Slot
